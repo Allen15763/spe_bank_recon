@@ -13,7 +13,7 @@ author = "SEA Team"
 
 DB_PATH = "./db/bank_statements.duckdb"
 LOG_FILE = "./logs/duckdb_operations.log"
-cred_path = "./spe_bank_recon/secret/credentials.json"
+cred_path = "./src/secret/credentials.json"
 
 [logging]
 # 日誌設定
@@ -31,7 +31,7 @@ log_path = "./logs"
 output_path = "./output"
 input_path = "./input"
 temp_path = "./temp"
-config_path = "./spe_bank_recon/config"
+config_path = "./src/config"
 
 [datasource]
 # 數據源預設設定

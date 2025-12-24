@@ -1,13 +1,13 @@
 # import spe_bank_recon.utils.database as db_tools
 
-from spe_bank_recon.utils import get_logger, get_structured_logger, config_manager
-from spe_bank_recon.utils import (DuckDBManager,
+from src.utils import get_logger, get_structured_logger, config_manager
+from src.utils import (DuckDBManager,
                                   create_table,
                                   insert_table,
                                   alter_column_dtype,
                                   drop_table,
                                   backup_table)
-from spe_bank_recon.core.datasources import GoogleSheetsManager
+from src.core.datasources import GoogleSheetsManager
 
 
 DB_PATH = config_manager.get('general', 'DB_PATH')

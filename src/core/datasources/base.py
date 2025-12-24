@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Any
 import pandas as pd
 from datetime import datetime
 
-from spe_bank_recon.utils.logging import get_logger
+from src.utils.logging import get_logger
 from .config import DataSourceConfig, DataSourceType
 
 
