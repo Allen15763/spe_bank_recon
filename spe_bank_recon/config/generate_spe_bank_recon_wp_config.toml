@@ -1,0 +1,194 @@
+# RunCurrentMonthPnL 任務配置文件
+
+[task]
+name = "run_current_month_pnl"
+type = "transform"
+description = "處理月度 P&L 資料匯總"
+version = "1.0.0"
+
+[paths]
+input_path = "./input"
+output_path = "./output"
+checkpoint_path = "./temp/checkpoints"
+
+# ============================================================================
+# 數據源配置
+# ============================================================================
+
+[datasources.atmonth]
+file_path = "AtMonth.xlsx"
+sheet_name = "Data"
+header = 0
+# dtype 將在程式中處理，全部讀為 str 後再轉換
+
+[datasources.lumos]
+folder_path = "./input/lumos"
+file_pattern = "*.csv"
+dtype = "str"  # 全部讀為字符串
+
+# ============================================================================
+# 清理與處理配置
+# ============================================================================
+
+[cleaning]
+# AtMonth 預處理
+atmonth_date_format = "%Y-%m-%d"
+atmonth_amount_columns = ["Amount", "3PL Amount"]
+atmonth_item_id_default = "0000"
+atmonth_object_default = "NA"
+
+# Lumos 處理
+lumos_cross_border_mapping = { "1" = "CB" }
+lumos_escrow_columns = [
+    "shopee_voucher_rebate",
+    "actual_shipping_fee",
+    "shopee_actual shipping_rebate",
+    "return_actual_shipping_fee",
+    "shopee_coin_rebate",
+    "shopee_item_rebate",
+    "bank_card_rebate",
+    "comm_fee",
+    "cc_fee",
+    "service_fee"
+]
+lumos_revenue_columns = [
+    "comm_fee",
+    "cc_fee",
+    "service_fee"
+]
+
+# ============================================================================
+# 分類規則配置
+# ============================================================================
+
+[classification]
+# Off_JKO 判斷條件
+off_jko_subtype_keyword = "Offline"
+off_jko_3pl_value = "JKO"
+
+# InvalidCOD 判斷條件
+invalidcod_subtype_keyword = "Invalid"
+invalidcod_cancel_reasons = [
+    "訂單取消，買家取貨",
+    "訂單取消，退貨完成",
+    "訂單逾期自動取消"
+]
+
+# SLS 判斷條件
+sls_subtype_keyword = "SLS"
+
+# ============================================================================
+# Status 規則配置
+# ============================================================================
+
+[status_rules]
+# SPE 判斷
+spe_elements = ["SPE", "SK"]
+spe_date_threshold = "2021-01-01"
+spe_codar_value = "SPEAR"
+old_data_marker = "2020/12以前"
+
+# One leg 判斷
+one_leg_exclude_accounts = ["111421", "200221"]
+
+# ============================================================================
+# 合併配置
+# ============================================================================
+
+[merge]
+# 合併順序（按此順序合併）
+merge_order = [
+    "not3pl_clear",       # Not3PL (Status in ['NonGap', 'NonGap_SPE', 'One leg'])
+    "not3pl_unclear",     # Unclear (排除 Subtype contains '遺失賠償')
+    "invalidcod_processed",
+    "sls_processed",
+    "off_jko"
+]
+
+# Subtype 處理規則
+remove_subtype_suffix = true  # 是否去除 Subtype 後綴
+subtype_suffix_separator = "_"  # 後綴分隔符
+
+# ============================================================================
+# 導出配置
+# ============================================================================
+
+[export]
+output_filename = "AtMonth_3PL.xlsx"
+sheet_name = "Data"
+index = false
+freeze_panes = [1, 0]  # 凍結第一行
+
+# ============================================================================
+# 日誌配置
+# ============================================================================
+
+[logging]
+level = "INFO"
+detailed = true
+color = true
+log_to_file = false
+log_file_path = "./logs/run_current_month_pnl.log"
+
+# ============================================================================
+# Pipeline 配置
+# ============================================================================
+
+[pipeline]
+stop_on_error = true  # 遇到錯誤是否停止
+max_retries = 3       # 步驟最大重試次數
+save_checkpoints = true  # 是否保存 checkpoint
+
+# ============================================================================
+# 步驟特定配置（可選）
+# ============================================================================
+
+[steps.load_atmonth]
+required = true
+description = "載入 AtMonth.xlsx"
+sheet_name = "Data"
+header = 0
+dtype = "str"  # 全部讀為字符串
+
+[steps.load_lumos]
+required = true
+description = "載入多個 Lumos CSV 並合併"
+folder_path = "./input/lumos"
+file_pattern = "*.csv"
+dtype = "str"  # 全部讀為字符串
+
+[steps.preprocess_atmonth]
+required = true
+description = "預處理 AtMonth 數據"
+
+[steps.classify_atmonth]
+required = true
+description = "將 AtMonth 分類為不同類型"
+
+[steps.process_lumos]
+required = true
+description = "處理 Lumos 數據，計算 EscrowSum, RevSum"
+
+[steps.process_invalidcod]
+required = true
+description = "處理 InvalidCOD，計算 Gap 並分配 Status"
+
+[steps.process_not3pl]
+required = true
+description = "處理 Not3PL，SPE 檢測，Status 分配，Gap 計算"
+
+[steps.process_sls]
+required = true
+description = "處理 SLS，判斷 NonGap"
+
+[steps.merge_all]
+required = true
+description = "合併所有分類數據"
+
+[steps.postprocess]
+required = true
+description = "後處理，格式化"
+
+[steps.export]
+required = true
+description = "導出到 AtMonth_3PL.xlsx"
