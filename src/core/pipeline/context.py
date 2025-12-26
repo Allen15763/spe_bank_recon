@@ -98,7 +98,10 @@ class ProcessingContext:
     def add_auxiliary_data(self, name: str, data: pd.DataFrame):
         """添加輔助數據"""
         self._auxiliary_data[name] = data
-        self.logger.debug(f"Added auxiliary data: {name} ({len(data)} rows)")
+        if isinstance(data, pd.DataFrame):
+            self.logger.debug(f"Added auxiliary data: {name} ({len(data)} rows)")
+        else:
+            self.logger.debug(f"Added auxiliary data: {name}")
     
     def get_auxiliary_data(self, name: str) -> Optional[pd.DataFrame]:
         """獲取輔助數據"""

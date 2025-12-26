@@ -76,7 +76,7 @@ def validate_file_extension(file_path: str, allowed_extensions: List[str] = None
         bool: 副檔名是否有效
     """
     if allowed_extensions is None:
-        allowed_extensions = SUPPORTED_FILE_EXTENSIONS
+        allowed_extensions = ['.xlsx', '.xls', '.csv', '.parquet', 'duckdb']
     
     try:
         path = Path(file_path)
@@ -111,7 +111,7 @@ def is_excel_file(file_path: str) -> bool:
     Returns:
         bool: 是否為Excel檔案
     """
-    return validate_file_extension(file_path, EXCEL_EXTENSIONS)
+    return validate_file_extension(file_path, ['.xlsx', '.xls'])
 
 
 def is_csv_file(file_path: str) -> bool:
@@ -124,7 +124,7 @@ def is_csv_file(file_path: str) -> bool:
     Returns:
         bool: 是否為CSV檔案
     """
-    return validate_file_extension(file_path, CSV_EXTENSIONS)
+    return validate_file_extension(file_path, ['.csv'])
 
 
 def ensure_directory_exists(directory_path: str) -> bool:

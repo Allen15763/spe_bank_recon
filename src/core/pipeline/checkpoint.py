@@ -93,17 +93,24 @@ class CheckpointManager:
         
         for aux_name in context.list_auxiliary_data():
             aux_data = context.get_auxiliary_data(aux_name)
-            if aux_data is not None and not aux_data.empty:
-                try:
-                    aux_path = aux_data_dir / f"{aux_name}.parquet"
-                    aux_data.to_parquet(aux_path, index=False)
-                except Exception as e:
-                    self.logger.warning(f"輔助數據 {aux_name} parquet 儲存失敗: {e}")
+            if isinstance(aux_data, pd.DataFrame):
+                if aux_data is not None and not aux_data.empty:
                     try:
-                        aux_path = aux_data_dir / f"{aux_name}.pkl"
-                        aux_data.to_pickle(aux_path)
-                    except Exception as e2:
-                        self.logger.error(f"輔助數據 {aux_name} 儲存失敗: {e2}")
+                        aux_path = aux_data_dir / f"{aux_name}.parquet"
+                        aux_data.to_parquet(aux_path, index=False)
+                    except Exception as e:
+                        self.logger.warning(f"輔助數據 {aux_name} parquet 儲存失敗: {e}")
+                        try:
+                            aux_path = aux_data_dir / f"{aux_name}.pkl"
+                            aux_data.to_pickle(aux_path)
+                        except Exception as e2:
+                            self.logger.error(f"輔助數據 {aux_name} 儲存失敗: {e2}")
+            else:
+                import pickle
+                aux_path = aux_data_dir / f"{aux_name}.pkl"
+                with open(aux_path, 'wb') as f:
+                    pickle.dump(aux_data, f)
+                self.logger.warning(f"輔助數據 {aux_name} pickle儲存")
         
         # 儲存變數和元數據（序列化安全處理）
         safe_variables = {}
