@@ -5,6 +5,7 @@ Bank Recon Pipeline 定義
 主要修復：
 1. 不用 PipelineBuilder.build()，使用 Pipeline 直接構造
 2. 統一配置管理
+3. 擴展支援 Daily Check & Entry 步驟 (Step 10-17)
 """
 from pathlib import Path
 from typing import Dict, Any, Optional, List
@@ -20,6 +21,7 @@ from src.core.pipeline.checkpoint import (
 from src.utils import get_logger, get_structured_logger
 
 from .steps import (
+    # Original Steps (1-9)
     LoadParametersStep,
     ProcessCUBStep,
     ProcessCTBCStep,
@@ -28,7 +30,16 @@ from .steps import (
     ProcessTaishiStep,
     AggregateEscrowStep,
     LoadInstallmentStep,
-    GenerateTrustAccountStep
+    GenerateTrustAccountStep,
+    # Daily Check & Entry Steps (10-17)
+    LoadDailyCheckParamsStep,
+    ProcessFRRStep,
+    ProcessDFRStep,
+    CalculateAPCCStep,
+    ValidateDailyCheckStep,
+    PrepareEntriesStep,
+    GenerateBigEntryStep,
+    OutputWorkpaperStep,
 )
 
 
@@ -51,6 +62,8 @@ class BankReconTask:
     1. Escrow 對帳（國泰、中信、NCCC、聯邦、台新）
     2. 分期報表處理
     3. Trust Account Fee 生成
+    4. Daily Check（FRR/DFR 處理、APCC 手續費計算）
+    5. Entry 生成（會計分錄）
     
     功能：
     - 完整的配置管理
@@ -61,7 +74,7 @@ class BankReconTask:
     - Resume 支持
     
     Example:
-        >>> # 基本使用
+        >>> # 基本使用（完整流程）
         >>> task = BankReconTask()
         >>> result = task.execute()
         >>> 
@@ -73,10 +86,13 @@ class BankReconTask:
         >>> 
         >>> # 僅執行 Escrow 對帳
         >>> result = task.execute(mode='escrow')
+        >>> 
+        >>> # 僅執行 Daily Check & Entry
+        >>> result = task.execute(mode='daily_check')
     """
     
     # 支持的 Pipeline 模式
-    SUPPORTED_MODES = ['full', 'escrow', 'installment']
+    SUPPORTED_MODES = ['full', 'escrow', 'installment', 'daily_check', 'entry', 'full_with_entry']
     
     def __init__(
         self,
@@ -176,7 +192,7 @@ class BankReconTask:
     
     def _create_full_pipeline(self) -> Pipeline:
         """
-        創建完整的銀行對帳 Pipeline
+        創建完整的銀行對帳 Pipeline（不含 Daily Check & Entry）
         
         包含 9 個步驟:
         1. LoadParametersStep - 載入參數
@@ -205,6 +221,33 @@ class BankReconTask:
         self._add_installment_steps(pipeline)
         
         self.logger.info(f"完整 Pipeline 創建完成: {len(pipeline.steps)} 個步驟")
+        return pipeline
+    
+    def _create_full_with_entry_pipeline(self) -> Pipeline:
+        """
+        創建完整的銀行對帳 Pipeline（包含 Daily Check & Entry）
+        
+        包含 17 個步驟 (Step 1-17)
+        
+        Returns:
+            Pipeline: 完整的處理 Pipeline
+        """
+        self.logger.info("創建完整的銀行對帳 Pipeline（含 Daily Check & Entry）")
+        
+        pipeline_config = self._get_pipeline_config()
+        pipeline = Pipeline(pipeline_config)
+        
+        # 添加所有步驟 (Step 1-9)
+        self._add_parameter_step(pipeline)
+        self._add_bank_processing_steps(pipeline)
+        self._add_escrow_aggregation_step(pipeline)
+        self._add_installment_steps(pipeline)
+        
+        # 添加 Daily Check & Entry 步驟 (Step 10-17)
+        self._add_daily_check_steps(pipeline)
+        self._add_entry_steps(pipeline)
+        
+        self.logger.info(f"完整 Pipeline (含 Entry) 創建完成: {len(pipeline.steps)} 個步驟")
         return pipeline
     
     def _create_escrow_pipeline(self) -> Pipeline:
@@ -248,6 +291,56 @@ class BankReconTask:
         self._add_installment_steps(pipeline)
         
         self.logger.info(f"Installment Pipeline 創建完成: {len(pipeline.steps)} 個步驟")
+        return pipeline
+    
+    def _create_daily_check_pipeline(self) -> Pipeline:
+        """
+        創建 Daily Check Pipeline
+        
+        包含步驟 1, 10-14（需要先有 Escrow 資料）
+        
+        注意: 此 Pipeline 需要在 Escrow 完成後執行，
+              或從已有的 checkpoint 恢復。
+        
+        Returns:
+            Pipeline: Daily Check Pipeline
+        """
+        self.logger.info("創建 Daily Check Pipeline")
+        
+        pipeline_config = self._get_pipeline_config()
+        pipeline = Pipeline(pipeline_config)
+        
+        # 添加參數載入步驟
+        self._add_parameter_step(pipeline)
+        
+        # 添加 Daily Check 步驟
+        self._add_daily_check_steps(pipeline)
+        
+        self.logger.info(f"Daily Check Pipeline 創建完成: {len(pipeline.steps)} 個步驟")
+        return pipeline
+    
+    def _create_entry_pipeline(self) -> Pipeline:
+        """
+        創建 Entry Pipeline
+        
+        包含步驟 1, 10-17（完整的 Daily Check + Entry）
+        
+        Returns:
+            Pipeline: Entry Pipeline
+        """
+        self.logger.info("創建 Entry Pipeline")
+        
+        pipeline_config = self._get_pipeline_config()
+        pipeline = Pipeline(pipeline_config)
+        
+        # 添加參數載入步驟
+        self._add_parameter_step(pipeline)
+        
+        # 添加 Daily Check & Entry 步驟
+        self._add_daily_check_steps(pipeline)
+        self._add_entry_steps(pipeline)
+        
+        self.logger.info(f"Entry Pipeline 創建完成: {len(pipeline.steps)} 個步驟")
         return pipeline
     
     # ========================================================================
@@ -320,6 +413,60 @@ class BankReconTask:
             description="生成 Trust Account Fee 工作底稿",
         ))
     
+    def _add_daily_check_steps(self, pipeline: Pipeline):
+        """添加 Daily Check 步驟 (Step 10-14)"""
+        # Step 10: 載入 Daily Check 參數
+        pipeline.add_step(LoadDailyCheckParamsStep(
+            name="Load_Daily_Check_Params",
+            description="載入 FRR/DFR 配置、手續費率、回饋金等參數",
+            config=self.config
+        ))
+        
+        # Step 11: 處理 FRR
+        pipeline.add_step(ProcessFRRStep(
+            name="Process_FRR",
+            description="處理財務部 Excel (FRR)",
+        ))
+        
+        # Step 12: 處理 DFR
+        pipeline.add_step(ProcessDFRStep(
+            name="Process_DFR",
+            description="處理 TW Bank Balance Excel (DFR)",
+        ))
+        
+        # Step 13: 計算 APCC
+        pipeline.add_step(CalculateAPCCStep(
+            name="Calculate_APCC",
+            description="計算 APCC 手續費",
+        ))
+        
+        # Step 14: 驗證 Daily Check
+        pipeline.add_step(ValidateDailyCheckStep(
+            name="Validate_Daily_Check",
+            description="驗證 FRR 手續費與請款",
+        ))
+    
+    def _add_entry_steps(self, pipeline: Pipeline):
+        """添加 Entry 步驟 (Step 15-17)"""
+        # Step 15: 準備會計分錄
+        pipeline.add_step(PrepareEntriesStep(
+            name="Prepare_Entries",
+            description="整理會計科目、處理回饋金、生成寬格式分錄",
+        ))
+        
+        # Step 16: 生成大 Entry
+        pipeline.add_step(GenerateBigEntryStep(
+            name="Generate_Big_Entry",
+            description="轉換為長格式分錄、DFR 餘額核對、生成 pivot 報表",
+        ))
+        
+        # Step 17: 輸出工作底稿
+        pipeline.add_step(OutputWorkpaperStep(
+            name="Output_Workpaper",
+            description="輸出 Daily Check Excel、Entry Excel、寫入 Google Sheets",
+            config=self.config
+        ))
+    
     # ========================================================================
     # Pipeline 構建方法（公開）
     # ========================================================================
@@ -332,9 +479,12 @@ class BankReconTask:
         
         Args:
             mode: Pipeline 模式
-                - 'full': 完整流程（Escrow + Installment）
+                - 'full': 完整流程（Escrow + Installment，不含 Entry）
+                - 'full_with_entry': 完整流程（包含 Entry）
                 - 'escrow': 僅 Escrow 對帳
                 - 'installment': 僅分期報表
+                - 'daily_check': Daily Check（Step 10-14）
+                - 'entry': Daily Check + Entry（Step 10-17）
                 
         Returns:
             Pipeline: 構建好的 Pipeline
@@ -347,8 +497,11 @@ class BankReconTask:
         # Pipeline 創建方法映射
         pipeline_creators = {
             'full': self._create_full_pipeline,
+            'full_with_entry': self._create_full_with_entry_pipeline,
             'escrow': self._create_escrow_pipeline,
-            'installment': self._create_installment_pipeline
+            'installment': self._create_installment_pipeline,
+            'daily_check': self._create_daily_check_pipeline,
+            'entry': self._create_entry_pipeline,
         }
         
         # 驗證 mode
@@ -412,7 +565,7 @@ class BankReconTask:
         執行任務
         
         Args:
-            mode: Pipeline 模式 ('full', 'escrow', 'installment')
+            mode: Pipeline 模式 ('full', 'full_with_entry', 'escrow', 'installment', 'daily_check', 'entry')
             save_checkpoints: 是否保存 checkpoint
             **kwargs: 其他上下文變量
             
@@ -441,7 +594,7 @@ class BankReconTask:
             self.logger.info("=" * 80)
             
             # 驗證輸入
-            validation = self.validate_inputs()
+            validation = self.validate_inputs(mode=mode)
             if not validation['is_valid']:
                 self.logger.error("輸入驗證失敗:")
                 for error in validation['errors']:
@@ -549,8 +702,8 @@ class BankReconTask:
         self.logger.info("=" * 80)
         
         try:
-            # 構建 Pipeline
-            pipeline = self.build_pipeline()
+            # 構建 Pipeline（使用 full_with_entry 以包含所有步驟）
+            pipeline = self.build_pipeline(mode='full_with_entry')
             
             # 從 checkpoint 恢復
             result = resume_from_checkpoint(
@@ -585,9 +738,12 @@ class BankReconTask:
     # 輔助方法
     # ========================================================================
     
-    def validate_inputs(self) -> Dict[str, Any]:
+    def validate_inputs(self, mode: str = 'full') -> Dict[str, Any]:
         """
         驗證輸入參數和文件
+        
+        Args:
+            mode: Pipeline 模式
         
         Returns:
             Dict[str, Any]: 驗證結果
@@ -620,18 +776,37 @@ class BankReconTask:
         # 檢查輸入文件（如果配置中有指定）
         input_files = self.config.get('installment', {}).get('reports')
         current_period = self.config.get('dates').get('current_period_start')[:7].replace('-', '')
-        for file_type, file_path in input_files.items():
-            if file_path and not isinstance(file_path, dict):
-                file_path = file_path.replace('{period}', current_period)
-                file_path_obj = Path(file_path)
-                if not file_path_obj.exists():
-                    warnings.append(f"{file_type} 文件不存在: {file_path}")
-            elif file_path and isinstance(file_path, dict):
-                for cate, path in file_path.items():
-                    path = path.replace('{period}', current_period)
-                    path_obj = Path(path)
-                    if not path_obj.exists():
-                        warnings.append(f"{cate} 文件不存在: {path}")
+        
+        if input_files:
+            for file_type, file_path in input_files.items():
+                if file_path and not isinstance(file_path, dict):
+                    file_path = file_path.replace('{period}', current_period)
+                    file_path_obj = Path(file_path)
+                    if not file_path_obj.exists():
+                        warnings.append(f"{file_type} 文件不存在: {file_path}")
+                elif file_path and isinstance(file_path, dict):
+                    for cate, path in file_path.items():
+                        path = path.replace('{period}', current_period)
+                        path_obj = Path(path)
+                        if not path_obj.exists():
+                            warnings.append(f"{cate} 文件不存在: {path}")
+        
+        # 如果是 daily_check 或 entry 模式，檢查 FRR/DFR 文件
+        if mode in ['daily_check', 'entry', 'full_with_entry']:
+            daily_check_config = self.config.get('daily_check', {})
+            
+            # 檢查 FRR 文件
+            frr_path = daily_check_config.get('frr', {}).get('path', '')
+            if frr_path:
+                frr_path = frr_path.replace('{period}', current_period)
+                if not Path(frr_path).exists():
+                    warnings.append(f"FRR 文件不存在: {frr_path}")
+            
+            # 檢查 DFR 文件
+            dfr_path = daily_check_config.get('dfr', {}).get('path', '')
+            if dfr_path:
+                if not Path(dfr_path).exists():
+                    warnings.append(f"DFR 文件不存在: {dfr_path}")
         
         return {
             'is_valid': len(errors) == 0,
@@ -686,6 +861,16 @@ class BankReconTask:
         trust_file = context.get_variable('trust_account_filename', '')
         if trust_file:
             self.logger.info(f"Trust Account 文件: {output_dir}/{trust_file}")
+        
+        # Daily Check 文件
+        daily_check_file = context.get_variable('daily_check_filename', '')
+        if daily_check_file:
+            self.logger.info(f"Daily Check 文件: {output_dir}/{daily_check_file}")
+        
+        # Entry 文件
+        entry_file = context.get_variable('entry_filename', '')
+        if entry_file:
+            self.logger.info(f"Entry 文件: {output_dir}/{entry_file}")
 
 
 # ============================================================================
@@ -703,7 +888,7 @@ def run_bank_recon(
     
     Args:
         config_path: 配置文件路徑（可選）
-        mode: 執行模式 ('full', 'escrow', 'installment')
+        mode: 執行模式 ('full', 'full_with_entry', 'escrow', 'installment', 'daily_check', 'entry')
         save_checkpoints: 是否保存 checkpoint
         **kwargs: 其他參數
         
@@ -716,8 +901,11 @@ def run_bank_recon(
         >>> # 執行完整流程
         >>> result = run_bank_recon()
         >>> 
-        >>> # 僅執行 Escrow 對帳
-        >>> result = run_bank_recon(mode='escrow')
+        >>> # 執行完整流程（含 Entry）
+        >>> result = run_bank_recon(mode='full_with_entry')
+        >>> 
+        >>> # 僅執行 Daily Check & Entry
+        >>> result = run_bank_recon(mode='entry')
     """
     task = BankReconTask(config_path=config_path)
     return task.execute(
@@ -749,8 +937,8 @@ def resume_bank_recon(
         >>> from spe_bank_recon.tasks.bank_recon import resume_bank_recon
         >>> 
         >>> result = resume_bank_recon(
-        ...     checkpoint_name='bank_recon_after_Process_CTBC',
-        ...     start_from_step='Process_NCCC'
+        ...     checkpoint_name='bank_recon_after_Generate_Trust_Account',
+        ...     start_from_step='Load_Daily_Check_Params'
         ... )
     """
     task = BankReconTask(config_path=config_path)
@@ -787,7 +975,7 @@ def get_pipeline_by_name(name: str, config_path: Optional[str] = None) -> Pipeli
     便捷函數：根據名稱獲取 Pipeline
     
     Args:
-        name: Pipeline 名稱 ('full', 'escrow', 'installment')
+        name: Pipeline 名稱 ('full', 'full_with_entry', 'escrow', 'installment', 'daily_check', 'entry')
         config_path: 配置文件路徑（可選）
         
     Returns:
@@ -797,7 +985,7 @@ def get_pipeline_by_name(name: str, config_path: Optional[str] = None) -> Pipeli
         ValueError: 未知的 Pipeline 名稱
         
     Example:
-        >>> pipeline = get_pipeline_by_name('full')
+        >>> pipeline = get_pipeline_by_name('full_with_entry')
         >>> print(f"Pipeline: {pipeline.config.name}")
     """
     task = BankReconTask(config_path=config_path)

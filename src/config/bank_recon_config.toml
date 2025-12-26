@@ -6,7 +6,7 @@
 [task]
 name = "bank_recon"
 description = "SPE 銀行對帳與分期報表處理任務"
-version = "1.0.0"
+version = "2.0.0"
 
 [dates]
 # 預設日期範圍 (可從命令列覆寫)
@@ -219,7 +219,7 @@ save_checkpoints = true
 checkpoint_dir = "./checkpoints"
 
 [pipeline.steps]
-# 可以禁用特定步驟（用於測試）
+# 原有步驟 (Step 1-9)
 load_parameters = true
 process_cub = true
 process_ctbc = true
@@ -229,6 +229,16 @@ process_taishi = true
 aggregate_escrow = true
 load_installment = true
 generate_trust_account = true
+
+# 新增步驟 (Step 10-17: Daily Check & Entry)
+load_daily_check_params = true
+process_frr = true
+process_dfr = true
+calculate_apcc = true
+validate_daily_check = true
+prepare_entries = true
+generate_big_entry = true
+output_workpaper = true
 
 # ============================================================
 # 輸出格式配置
@@ -271,3 +281,271 @@ level = "INFO"
 format = "detailed"
 log_to_console = true
 log_to_file = true
+
+# ============================================================
+# Daily Check 配置 (Step 10-14)
+# ============================================================
+
+[daily_check]
+enabled = true
+
+# FRR (財務部) 檔案配置
+[daily_check.frr]
+path = "./input/財務部-{period}.xlsx"
+sheet_name = "匯入款組成-樂購"
+header_row = 0
+
+# FRR 欄位映射 (銀行順序: TSPG, CTBC, NCCC, CUB, UBOT)
+[daily_check.frr.columns]
+date_col = "Date"
+# TSPG (台新): 4 columns
+tspg_cols = ["TSPG_Net_Billing", "TSPG_Handling_Fee", "TSPG_Adjustment", "TSPG_Net_Disbursement"]
+# CTBC (中信): 4 columns
+ctbc_cols = ["CTBC_Net_Billing", "CTBC_Handling_Fee", "CTBC_Adjustment", "CTBC_Net_Disbursement"]
+# NCCC: 4 columns
+nccc_cols = ["NCCC_Net_Billing", "NCCC_Handling_Fee", "NCCC_Adjustment", "NCCC_Net_Disbursement"]
+# CUB (國泰): 5 columns (多一個 Remittance_Fee)
+cub_cols = ["CUB_Net_Billing", "CUB_Handling_Fee", "CUB_Adjustment", "CUB_Remittance_Fee", "CUB_Net_Disbursement"]
+# UBOT (聯邦): 5 columns (Remittance_Fee 在 Adjustment 之前)
+ubot_cols = ["UBOT_Net_Billing", "UBOT_Handling_Fee", "UBOT_Remittance_Fee", "UBOT_Adjustment", "UBOT_Net_Disbursement"]
+
+# 銀行名稱映射 (FRR欄位名 -> 顯示名)
+[daily_check.frr.bank_mapping]
+TSPG = "台新"
+CTBC = "CTBC"
+NCCC = "NCCC"
+CUB = "國泰"
+UBOT = "聯邦"
+
+# DFR (TW Bank Balance) 檔案配置
+[daily_check.dfr]
+path = "./input/TW Bank Balance(NEW).xlsx"
+sheet_name = " CTBC SINCE 202108"
+header_row = 5
+
+# DFR 欄位配置 (完全配置化)
+[daily_check.dfr.columns]
+date_col = "Date"
+
+# Inbound 欄位範圍
+inbound_start_col = "BT"
+inbound_end_col = "Collection Shop"
+inbound_extra_cols = ["offline transfer"]
+
+# Inbound 驗證欄位清單
+inbound_validation_cols = [
+    "BT",
+    "CC\n(中國信託收單)",
+    "CC\n(愛貝台新收單)",
+    "CC\n(聯合信用卡中心)",
+    "CC\n(國泰世華)",
+    "CC\n(聯邦銀行)",
+    "COD(蝦皮)",
+    "7-11\n(統一數網)",
+    "全家(FM)\n(日翊文化行銷)",
+    "黑貓(HM)\n(統一客樂得)",
+    "萊爾富(Hi Life)\n(萊爾富國際)",
+    "來來超商(OK)\n(來來超商)",
+    "宅配通\n(台灣宅配通)",
+    "嘉里\n(嘉里快遞)",
+    "新竹物流\n(ＨＣＴ新竹物流)",
+    "蝦皮店到店(SPX)\n(新加坡商蝦皮娛)",
+    "Collection Shop",
+    "offline transfer"
+]
+
+# Outbound 欄位清單
+outbound_cols = [
+    "76512178905003",
+    "Digital Product Payment",
+    "SVS",
+    "715120012087 (OLD)\n715120019251 (NEW)",
+    "Shopping Plus"
+]
+outbound_extra_cols = [
+    "Others",
+    "Others.1",
+    "Shopee Wallet",
+    "COD RR",
+    "個案撥款",
+    "tax"
+]
+
+# Outbound 驗證欄位清單
+outbound_validation_cols = [
+    "76512178905003",
+    "Digital Product Payment",
+    "SVS",
+    "715120012087 (OLD)\n715120019251 (NEW)",
+    "Shopping Plus",
+    "Others",
+    "Others.1",
+    "Shopee Wallet",
+    "COD RR",
+    "個案撥款",
+    "tax"
+]
+
+# 其他特殊欄位
+unsuccessful_ach_start_col = "Unsuccessful\n(ACH)"
+unsuccessful_ach_end_col = "Unsuccessful (ACH)\nCOD RR"
+spl_col = "企網自行轉帳\n20680100228850"
+interest_col = "存款息"
+interbank_col = "Interbank\ntransfer"
+adj_col = "adjustment"
+service_fee_col = "service fee"
+remittance_fee_col = "remittance fee"
+handing_fee_col = "handing_fee"
+
+# ============================================================
+# Entry 配置 (Step 15-17)
+# ============================================================
+
+[entry]
+enabled = true
+
+# 仲信手續費檔案
+[entry.easyfund]
+path = "./input/仲信手續費_2025.xlsx"
+usecols = "A:K"
+
+# 會計科目映射
+[entry.accounts]
+"101150" = "Cash in Bank - Fubon TWD 2087"
+"104171" = "Escrow Bank - CTBC TWD 4935"
+"111301" = "Tax Receivable - GST/VAT"
+"111302" = "Tax Receivable - WHT"
+"112001" = "Amount due from IC-APYTW"
+"112002" = "Unbilled Receivables-RC-SPTTW"
+"113101" = "Receivables from payment gateway"
+"200208" = "Receive on behalf of Shopee"
+"200601" = "Tax Payables - GST/VAT/WHT"
+"200701" = "Amount due to SPTTW-Escrow"
+"440001" = "Interest Income"
+"999995" = "Cash Clearing"
+
+# 有子分類的科目
+[entry.accounts_detail."460103"]
+APCC_ACH = "Commission charge-RC-SPTTW-ACH/eACH/EDI"
+APCC_手續費 = "Commission charge-RC-SPTTW-APCC手續費"
+
+[entry.accounts_detail."530006"]
+收單_SPE = "Bank transaction fee(Remittance fee)-收單-SPE"
+回饋金 = "Bank transaction fee(Remittance fee)-CTBC收單手續費回饋金"
+內扣CTBCCC匯費 = "Bank transaction fee(Remittance fee)-收單轉帳匯費"
+COD匯費 = "Bank transaction fee(Remittance fee)-COD匯費"
+
+# 交易類型排序
+[entry.transaction_type_order]
+"期初數" = "00.期初數"
+"內扣_ctbc_cc_匯費" = "01.內扣_ctbc_cc_匯費"
+"received_ctbc_spt" = "02.received_ctbc_spt"
+"received_ctbc_spt_退匯" = "03.received_ctbc_spt_退匯"
+"out_ctbc_spt" = "04.out_ctbc_spt"
+"other" = "05.other"
+"other_利息" = "05.other_利息"
+"spt" = "06.spt"
+"spe_withdrawal" = "07.spe_withdrawal"
+"spl手續費調整" = "08.spl手續費調整"
+"發票已開立沖轉" = "09.發票已開立沖轉"
+
+# 排除零值驗證的交易類型
+[entry.validation]
+exclude_zero_check = ["00.期初數", "09.發票已開立沖轉"]
+
+# ============================================================
+# 業務規則配置 (每月調整)
+# ============================================================
+
+[business_rules]
+# 每月需要調整的參數
+ops_adj_amt = 97  # FRR 調扣，用於加回核算手續費發票數字
+cod_remittance_fee = 9740  # COD 匯費
+ach_exps = 9163359  # 中信 ACH eACH EDI
+
+# 手續費尾差調整 (調成跟發票一致)
+taishi_service_fee_rounding = 0
+ctbc_service_fee_rounding = 0
+
+# 中信回饋金（若當月無則設為 0）
+ctbc_rebate_amt = 0
+
+# 特殊日期交易配置 (如 received_ctbc_spt)
+[business_rules.special_transactions]
+# 格式: "YYYY-MM-DD" = amount
+# 例如: 
+"2025-10-29" = 181432345
+
+# ============================================================
+# Google Sheets 配置
+# ============================================================
+
+[google_sheets]
+enabled = true
+spreadsheet_url = "https://docs.google.com/spreadsheets/d/17puiAmAhM2dAm9BR7Sck1E2fwsf0v76CkpiLkVJPlxE/edit?gid=0#gid=0"
+
+# 輸入 (從 Google Sheets 讀取)
+[google_sheets.input]
+spe_rate_sheet = "spe_rate"
+cub_rebate_sheet = "國泰回饋金"
+ctbc_rebate_sheet = "中信回饋金"
+acquiring_charge_history_sheet = "acquiring_charge_raw"
+apcc_history_sheet = "APCC 手續費"
+
+# 輸出 (寫入 Google Sheets)
+[google_sheets.output]
+acquiring_charge_raw_sheet = "acquiring_charge_raw"
+acquiring_charge_sum_display_sheet = "acquiring_charge_sum_display"
+big_entry_raw_sheet = "大entry_raw"
+big_entry_display_sheet = "大entry_display"
+cc_net_rev_sheet = "cc_net_rev"
+
+# 寫入模式配置
+[google_sheets.output.modes]
+acquiring_charge_raw = "append"
+acquiring_charge_sum_display = "overwrite"
+big_entry_raw = "append"
+big_entry_display = "overwrite"
+
+# ============================================================
+# Daily Check 輸出配置
+# ============================================================
+
+[output.daily_check]
+filename = "SPETW_daily_check_{period}_中信.xlsx"
+
+# Daily Check Excel 輸出的 Sheet 清單
+sheets = [
+    "dfr",
+    "dfr_wp",
+    "frr_handling_fee",
+    "frr_remittance_fee",
+    "apcc_acquiring_charge",
+    "apcc_validate_frr",
+    "summary_01",
+    "validate_frr_handling_fee",
+    "validate_frr_net_billing",
+    "extracted_from_frr"
+]
+
+[output.entry]
+filename = "TW_SPE_entries_{period}.xlsx"
+
+# Entry Excel 輸出的 Sheet 清單
+sheets = [
+    "DFR驗證",
+    "分類驗證",
+    "大entry",
+    "summary_01",
+    "entry_temp",
+    "entry_long_temp",
+    "dfr",
+    "dfr_wp",
+    "frr_handling_fee",
+    "frr_remittance_fee",
+    "APCC手續費",
+    "APCC手續費_validate_frr",
+    "validate_frr_handling_fee",
+    "validate_frr_net_billing",
+    "extracted_from_frr"
+]
