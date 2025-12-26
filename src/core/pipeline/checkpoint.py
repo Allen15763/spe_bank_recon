@@ -106,11 +106,13 @@ class CheckpointManager:
                         except Exception as e2:
                             self.logger.error(f"輔助數據 {aux_name} 儲存失敗: {e2}")
             else:
-                import pickle
-                aux_path = aux_data_dir / f"{aux_name}.pkl"
-                with open(aux_path, 'wb') as f:
-                    pickle.dump(aux_data, f)
-                self.logger.warning(f"輔助數據 {aux_name} pickle儲存")
+                try:
+                    import pickle
+                    aux_path = aux_data_dir / f"{aux_name}.pkl"
+                    with open(aux_path, 'wb') as f:
+                        pickle.dump(aux_data, f)
+                except Exception as err:
+                    self.logger.error(f"輔助數據(pure pickle) {aux_name} 儲存失敗: {err}")
         
         # 儲存變數和元數據（序列化安全處理）
         safe_variables = {}

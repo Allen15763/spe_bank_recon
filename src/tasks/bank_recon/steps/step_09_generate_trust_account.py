@@ -58,7 +58,7 @@ class GenerateTrustAccountStep(PipelineStep):
             # ===============================================================
             # 2. 更新 normal 金額 (國泰和聯邦)
             # ===============================================================
-            df_escrow = context.get_auxiliary_data('df_summary_escrow_inv')
+            df_escrow = context.get_auxiliary_data('df_escrow_inv_summary')
             
             # 國泰 normal
             total_cub = df_escrow.query("銀行.str.contains('cub')")['對帳_請款金額_Trust_Account_Fee'].sum()
@@ -101,7 +101,11 @@ class GenerateTrustAccountStep(PipelineStep):
                 df_escrow.to_excel(writer, sheet_name='escrow_inv', index=False)
                 context.get_auxiliary_data('invoice_summary').to_excel(
                     writer, sheet_name='invoice_summary', index=False)
+                context.get_auxiliary_data('invoice_details').to_excel(
+                    writer, sheet_name='invoice_details', index=False)
                 validation.to_excel(writer, sheet_name='trust_account_validation')
+                context.get_auxiliary_data('escrow_inv_raw').to_excel(
+                    writer, sheet_name='escrow_inv_raw', index=False)
                 
                 # 各銀行分期明細
                 for (df, bank) in bank_data:

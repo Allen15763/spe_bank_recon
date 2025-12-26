@@ -63,10 +63,7 @@ class LoadInstallmentStep(PipelineStep):
             # ===================================================================
             
             # 2.1 國泰 (CUB)
-            cub_individual_agg, cub_nonindividual_agg = self.process_cub_installment(
-                installment_reports.get('cub_individual'),
-                installment_reports.get('cub_nonindividual')
-            )
+            cub_individual_agg, cub_nonindividual_agg = self.process_cub_installment(installment_reports.get('cub'))
             
             # 2.2 中信 (CTBC)
             ctbc_agg = self.process_ctbc_installment(
@@ -234,59 +231,153 @@ class LoadInstallmentStep(PipelineStep):
         return cub_individual_agg, cub_nonindividual_agg
     
     def process_ctbc_installment(self, reports, context):
-        """處理中信"""
-        self.logger.info("處理中信...")
+        """
+        處理中信分期報表
+        
+        1. ✅ 使用 disbursement_date 過濾（處理日）
+        2. ✅ 同時處理分期和非分期數據
+        3. ✅ 修正 normal 計算邏輯（避免 TOTAL 行重複計算）
+        """
+        self.logger.info("處理中信分期報表...")
         
         beg = context.get_variable('beg_date')
         end = context.get_variable('end_date')
         
-        # 讀取並處理 Excel sheets
-        dfs_install = []
-        with pd.ExcelFile(reports['ctbc']) as xls:
+        # ========================================================================
+        # Step 1: 讀取並分類 Excel sheets
+        # ========================================================================
+        dfs_installment = []
+        dfs_noninstallment = []
+        sheet_pattern = context.get_variable('installment_report_spec').get('ctbc').get('sheet_pattern')
+        ins_usecols = context.get_variable('installment_report_spec').get('ctbc').get('installment_usecols')
+        nonins_usecols = context.get_variable('installment_report_spec').get('ctbc').get('noninstallment_usecols')
+        header = context.get_variable('installment_report_spec').get('ctbc').get('header_row')
+        ins_table = context.get_variable('banks_info').get('ctbc').get('tables').get('installment')
+        nonins_table = context.get_variable('banks_info').get('ctbc').get('tables').get('noninstallment')
+        
+        with pd.ExcelFile(reports) as xls:
             for sheet in xls.sheet_names:
-                if re.search(r'\d{4}', sheet) and '分' in sheet:
-                    df = xls.parse(sheet, usecols='A:I', header=2)
-                    df['source'] = sheet
-                    dfs_install.append(df)
+                if re.search(sheet_pattern, sheet):
+                    if '分' in sheet:
+                        # 分期數據：讀取 A:I 欄
+                        df = xls.parse(sheet, usecols=ins_usecols, header=header)
+                        df['source'] = sheet
+                        dfs_installment.append(df)
+                    else:
+                        # 非分期數據：讀取 B:I 欄
+                        df = xls.parse(sheet, usecols=nonins_usecols, header=header)
+                        df['source'] = sheet
+                        dfs_noninstallment.append(df)
         
-        df_install = pd.concat(dfs_install, ignore_index=True)
+        df_install = pd.concat(dfs_installment, ignore_index=True) if dfs_installment else pd.DataFrame()
+        df_noninstall = pd.concat(dfs_noninstallment, ignore_index=True) if dfs_noninstallment else pd.DataFrame()
         
-        # 讀取日期範圍
+        # ========================================================================
+        # Step 2: 從資料庫取得日期範圍
+        # ========================================================================
         with DuckDBManager(
             db_path=context.get_variable('db_path'),
             log_file=context.get_variable('log_file'),
             log_level="DEBUG"
         ) as db:
-            req_dates = db.query_to_df(
-                f"SELECT request_date FROM ctbc_installment WHERE request_date BETWEEN '{beg}' AND '{end}'"
+            # 分期：使用 disbursement_date 過濾（處理日）
+            install_dates = db.query_to_df(
+                f"SELECT request_date FROM {ins_table} "
+                f"WHERE disbursement_date BETWEEN '{beg}' AND '{end}'"
+            ).iloc[:, 0].dt.strftime('%m%d').tolist()
+            
+            # 非分期：使用 disbursement_date 過濾（處理日）
+            noninstall_dates = db.query_to_df(
+                f"SELECT request_date FROM {nonins_table} "
+                f"WHERE disbursement_date BETWEEN '{beg}' AND '{end}'"
             ).iloc[:, 0].dt.strftime('%m%d').tolist()
         
-        # 計算分期數據
-        df_install['source_clean'] = df_install['source'].str.replace('分-', '')
+        # ========================================================================
+        # Step 3: 計算分期數據
+        # ========================================================================
         results = {}
-        for period in [3, 6, 12, 24]:
-            mask = (df_install['期數'] == period) & df_install['source_clean'].isin(req_dates)
-            results[f'{period}期'] = {
-                'total_claimed': df_install.loc[mask, '請/調金額'].sum(),
-                'total_service_fee': df_install.loc[mask, '實際手續費'].sum()
-            }
         
-        # 調整
-        mask_adj = df_install['產品別'].str.contains('調', na=False) & df_install['source_clean'].isin(req_dates)
-        results['3期']['total_claimed'] += df_install.loc[mask_adj, '請/調金額'].sum()
-        results['3期']['total_service_fee'] += df_install.loc[mask_adj, '實際手續費'].sum()
+        if not df_install.empty:
+            df_install['source_clean'] = df_install['source'].str.replace('分-', '')
+            
+            for period in [3, 6, 12, 24]:
+                mask = (df_install['期數'] == period) & df_install['source_clean'].isin(install_dates)
+                results[f'{period}期'] = {
+                    'total_claimed': df_install.loc[mask, '請/調金額'].sum(),
+                    'total_service_fee': df_install.loc[mask, '實際手續費'].sum()
+                }
+            
+            # 調整加到 3期
+            mask_adj = (
+                df_install['產品別'].str.contains('調', na=False) & 
+                df_install['source_clean'].isin(install_dates)
+            )
+            results['3期']['total_claimed'] += df_install.loc[mask_adj, '請/調金額'].sum()
+            results['3期']['total_service_fee'] += df_install.loc[mask_adj, '實際手續費'].sum()
+        else:
+            results = {f'{p}期': {'total_claimed': 0, 'total_service_fee': 0} 
+                       for p in [3, 6, 12, 24]}
         
-        # normal (非分期)
-        results['normal'] = {'total_claimed': 0, 'total_service_fee': 0}
+        # ========================================================================
+        # Step 4: 計算 normal（非分期）- ✅ 關鍵修正
+        # ========================================================================
+        if not df_noninstall.empty:
+            # ✅ 修正：使用明確的包含邏輯
+            # 問題原因：原本用排除法 ~isin(['帳務調整', '調手續費'])
+            #          會抓到 TOTAL 行，導致重複計算（結果是2倍）
+            # 解決方案：明確指定只要本行卡（卡別 isna）和他行卡（卡別=='非本行國內'）
+            
+            mask_normal = (
+                df_noninstall['source'].isin(noninstall_dates) &  # 日期過濾
+                (
+                    df_noninstall['卡別'].isna() |  # 本行卡（ON-US 的數據行，卡別為 NaN）
+                    (df_noninstall['卡別'] == '非本行國內')  # 他行卡
+                )
+            )
+            
+            normal_claimed = df_noninstall.loc[mask_normal, '請款金額'].sum()
+            normal_fee = df_noninstall.loc[mask_normal, '手續費'].sum()
+            
+            # 詳細統計（用於驗證）
+            if self.logger.level <= 20:  # INFO level
+                onus_mask = df_noninstall['source'].isin(noninstall_dates) & df_noninstall['卡別'].isna()
+                notus_mask = df_noninstall['source'].isin(noninstall_dates) & (df_noninstall['卡別'] == '非本行國內')
+                onus_claimed = df_noninstall.loc[onus_mask, '請款金額'].sum()
+                onus_fee = df_noninstall.loc[onus_mask, '手續費'].sum()
+                notus_claimed = df_noninstall.loc[notus_mask, '請款金額'].sum()
+                notus_fee = df_noninstall.loc[notus_mask, '手續費'].sum()
+                
+                self.logger.info("  非分期數據明細:")
+                self.logger.info(f"    本行卡: 手續費 {onus_fee:,.0f} / 請款 {onus_claimed:,.0f}")
+                self.logger.info(f"    他行卡: 手續費 {notus_fee:,.0f} / 請款 {notus_claimed:,.0f}")
+                self.logger.info(f"    合計:   手續費 {normal_fee:,.0f} / 請款 {normal_claimed:,.0f}")
+        else:
+            normal_claimed = 0
+            normal_fee = 0
+            context.add_warning(f"中信分期手續費計算有誤(他行卡/本行卡): {self.__class__.__name__}")
         
-        return pd.DataFrame([
+        results['normal'] = {
+            'total_claimed': normal_claimed,
+            'total_service_fee': normal_fee
+        }
+        
+        # ========================================================================
+        # Step 5: 返回結果
+        # ========================================================================
+        result_df = pd.DataFrame([
             {'transaction_type': k, **v} for k, v in results.items()
         ])
+        
+        self.logger.info(f"  中信處理完成: {len(result_df)} 筆")
+        self.logger.info(f"    分期總額: {sum(v['total_claimed'] for k, v in results.items() if '期' in k):,.0f}")
+        self.logger.info(f"    非分期總額: {normal_claimed:,.0f}")
+        
+        return result_df
     
     def process_nccc_installment(self, reports):
         """處理 NCCC"""
         self.logger.info("處理 NCCC...")
-        df = pd.read_excel(reports['nccc'], header=4, dtype=str)
+        df = pd.read_excel(reports, header=4, dtype=str)
         df = df.query("~期數.isna() and ~期數.isin(['小計', '合計', '總計'])")
         
         for c in ['特店代號', '處理日', '類別', '卡別']:
@@ -305,7 +396,7 @@ class LoadInstallmentStep(PipelineStep):
     def process_ub_installment(self, reports):
         """處理聯邦"""
         self.logger.info("處理聯邦...")
-        df = pd.read_excel(reports['ub'], header=3, dtype=str)
+        df = pd.read_excel(reports, header=3, dtype=str)
         df = df.query("~商店名稱.isna() and ~交易類別.isna()").reset_index(drop=True)
         
         df['金額'] = df['金額'].astype(int)
@@ -328,7 +419,7 @@ class LoadInstallmentStep(PipelineStep):
         self.logger.info("處理台新...")
         
         def read_taishi(sheet_idx, is_voucher=False):
-            df = pd.read_excel(reports['taishi'], header=2, dtype=str, sheet_name=sheet_idx)
+            df = pd.read_excel(reports, header=2, dtype=str, sheet_name=sheet_idx)
             df = df.iloc[:df.query("卡別=='總筆數'").index[0], :]
             df.columns = ['卡別', 'transaction_type', 'count_and_amount', 'Visa', 'M/C', 
                           'JCB', 'CUP', 'Discover', 'S/P', 'U/C', '跨境', '小計']

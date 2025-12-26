@@ -136,11 +136,13 @@ service_fee_sheet_name = "service_fee_rate"
 [installment.reports]
 # 報表路徑範本 ({period} 會被替換為期間，如 202510)
 ub = "./input/聯邦分期報表_{period}.xlsx"
-cub_individual = "./input/國泰分期報表_個人_{period}.xlsx"
-cub_nonindividual = "./input/國泰分期報表_法人_{period}.xls"
 ctbc = "./input/CTBC手續費_{period}.xlsx"
 nccc = "./input/NCCC分期報表_{period}.xls"
 taishi = "./input/台新分期報表_{period}.xls"
+
+[installment.reports.cub]
+cub_individual = "./input/國泰分期報表_個人_{period}.xlsx"
+cub_nonindividual = "./input/國泰分期報表_法人_{period}.xls"
 
 [installment.report_specs]
 # 各銀行報表格式規格
@@ -154,6 +156,9 @@ dtype = "str"
 # CTBC 有多個 sheet，需特殊處理
 process_all_sheets = true
 sheet_pattern = "\\d{4}"  # 符合年份的 sheet
+installment_usecols = "A:I"
+noninstallment_usecols = "B:I"
+header_row = 2
 
 [installment.report_specs.nccc]
 header_row = 4

@@ -491,11 +491,12 @@ class BankReconTask:
                 self._log_output_files(context)
                 
                 # 獲取警告
-                warnings = context.get_warnings()
-                if warnings:
-                    self.logger.warning(f"執行過程中有 {len(warnings)} 個警告:")
-                    for i, warning in enumerate(warnings, 1):
-                        self.logger.warning(f"  {i}. {warning}")
+                if context.has_warnings():
+                    warnings = context.warnings()
+                    if warnings:
+                        self.logger.warning(f"執行過程中有 {len(warnings)} 個警告:")
+                        for i, warning in enumerate(warnings, 1):
+                            self.logger.warning(f"  {i}. {warning}")
             else:
                 self.logger.error("=" * 80)
                 self.logger.error("❌ 任務執行失敗！")
@@ -618,13 +619,19 @@ class BankReconTask:
         
         # 檢查輸入文件（如果配置中有指定）
         input_files = self.config.get('installment', {}).get('reports')
+        current_period = self.config.get('dates').get('current_period_start')[:7].replace('-', '')
         for file_type, file_path in input_files.items():
-            if file_path:
-                current_period = self.config.get('dates').get('current_period_start')[:7].replace('-', '')
+            if file_path and not isinstance(file_path, dict):
                 file_path = file_path.replace('{period}', current_period)
                 file_path_obj = Path(file_path)
                 if not file_path_obj.exists():
                     warnings.append(f"{file_type} 文件不存在: {file_path}")
+            elif file_path and isinstance(file_path, dict):
+                for cate, path in file_path.items():
+                    path = path.replace('{period}', current_period)
+                    path_obj = Path(path)
+                    if not path_obj.exists():
+                        warnings.append(f"{cate} 文件不存在: {path}")
         
         return {
             'is_valid': len(errors) == 0,

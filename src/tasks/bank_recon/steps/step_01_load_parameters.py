@@ -115,10 +115,19 @@ class LoadParametersStep(PipelineStep):
             
             # 替換路徑中的期間變數
             installment_reports = {}
+            installment_reports_nest = {}
             for bank, path_template in installment_config.items():
-                path = path_template.replace('{period}', current_month)
-                installment_reports[bank] = path
-                self.logger.info(f"{bank} 分期報表: {path}")
+                if not isinstance(path_template, dict):
+                    path = path_template.replace('{period}', current_month)
+                    installment_reports[bank] = path
+                    self.logger.info(f"{bank} 分期報表: {path}")
+
+                elif isinstance(path_template, dict):
+                    for cate, path in path_template.items():
+                        path = path.replace('{period}', current_month)
+                        installment_reports_nest[cate] = path
+                        self.logger.info(f"{cate} 分期報表: {path}")
+                    installment_reports[bank] = installment_reports_nest
             
             context.set_variable('installment_reports', installment_reports)
             
@@ -141,6 +150,15 @@ class LoadParametersStep(PipelineStep):
             bank_order = self.config.get('output').get('bank_order')
             context.set_variable('escrow_bank_order', bank_order.get('escrow', []))
             context.set_variable('trust_account_bank_order', bank_order.get('trust_account', []))
+
+            # 銀行表等銀行資訊
+            bank_tables = []
+            for bank, values in self.config.get('banks').items():
+                bank_tables.extend(list(values.get('tables').values()))
+            context.set_variable('bank_tables', bank_tables)
+            context.set_variable('banks_info', self.config.get('banks'))
+            context.set_variable('installment_report_spec', 
+                                 self.config.get('installment').get('report_specs'))
             
             # =================================================================
             # 6. 顯示摘要

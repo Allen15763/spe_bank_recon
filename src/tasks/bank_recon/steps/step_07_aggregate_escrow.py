@@ -201,24 +201,26 @@ class AggregateEscrowStep(PipelineStep):
             # 確保輸出目錄存在
             output_path.mkdir(parents=True, exist_ok=True)
             
-            with pd.ExcelWriter(output_file, engine='xlsxwriter') as writer:
-                # Sheet 1: 摘要
-                df_summary.to_excel(writer, sheet_name='summary', index=False)
-                
-                # Sheet 2: 發票摘要
-                invoice_summary.to_excel(writer, sheet_name='invoice_summary', index=False)
-                
-                # Sheet 3: 發票明細
-                df_invoice.to_excel(writer, sheet_name='invoice_details', index=False)
+            # with pd.ExcelWriter(output_file, engine='xlsxwriter') as writer:
+            #     # Sheet 1: 手續費、請款金額、發票計算摘要
+            #     df_summary.to_excel(writer, sheet_name='escrow_inv_summary', index=False)
+            #     # Sheet 2: 發票摘要
+            #     invoice_summary.to_excel(writer, sheet_name='invoice_summary', index=False)
+            #     # Sheet 3: 發票明細
+            #     df_invoice.to_excel(writer, sheet_name='invoice_details', index=False)
             
-            self.logger.info(f"成功輸出 Escrow Excel: {output_file}")
+            # self.logger.info(f"成功輸出 Escrow Excel: {output_file}")
+
+            tables: list = context.get_variable('bank_tables')
+            escrow_inv_raw = self._get_escrow_inv_raw(tables, db_path, log_file)
             
             # ===================================================================
             # 10. 儲存到 Context
             # ===================================================================
-            context.add_auxiliary_data('df_summary_escrow_inv', df_summary)
+            context.add_auxiliary_data('df_escrow_inv_summary', df_summary)
             context.add_auxiliary_data('invoice_summary', invoice_summary)
-            context.add_auxiliary_data('df_invoice', df_invoice)
+            context.add_auxiliary_data('invoice_details', df_invoice)
+            context.add_auxiliary_data('escrow_inv_raw', escrow_inv_raw)
             
             # ===================================================================
             # 11. 記錄統計資訊
@@ -230,7 +232,7 @@ class AggregateEscrowStep(PipelineStep):
             self.logger.info("Escrow 匯總統計:")
             self.logger.info(f"  總 Trust Account Fee: {total_recon_amount:,}")
             self.logger.info(f"  總手續費: {total_service_fee:,}")
-            self.logger.info(f"  輸出檔案: {output_file}")
+            # self.logger.info(f"  輸出檔案: {output_file}")
             self.logger.info(f"{'=' * 60}\n")
             
             return StepResult(
@@ -256,6 +258,18 @@ class AggregateEscrowStep(PipelineStep):
                 error=e,
                 message=str(e)
             )
+        
+    def _get_escrow_inv_raw(self, tables: list, db_path, log_file) -> pd.DataFrame:
+        dfs = []
+        for name in tables:
+            with DuckDBManager(db_path=db_path, log_file=log_file, log_level="DEBUG") as db_manager:
+                query = f"""
+                SELECT * FROM {name}
+                """
+                df = db_manager.query_to_df(query)
+                df['source'] = name
+            dfs.append(df)
+        return pd.concat(dfs, ignore_index=True)
 
 
 if __name__ == "__main__":
