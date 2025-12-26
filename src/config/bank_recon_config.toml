@@ -427,13 +427,13 @@ usecols = "A:K"
 # 有子分類的科目
 [entry.accounts_detail."460103"]
 APCC_ACH = "Commission charge-RC-SPTTW-ACH/eACH/EDI"
-APCC_手續費 = "Commission charge-RC-SPTTW-APCC手續費"
+"APCC_手續費" = "Commission charge-RC-SPTTW-APCC手續費"
 
 [entry.accounts_detail."530006"]
-收單_SPE = "Bank transaction fee(Remittance fee)-收單-SPE"
-回饋金 = "Bank transaction fee(Remittance fee)-CTBC收單手續費回饋金"
-內扣CTBCCC匯費 = "Bank transaction fee(Remittance fee)-收單轉帳匯費"
-COD匯費 = "Bank transaction fee(Remittance fee)-COD匯費"
+"收單_SPE" = "Bank transaction fee(Remittance fee)-收單-SPE"
+"回饋金" = "Bank transaction fee(Remittance fee)-CTBC收單手續費回饋金"
+"內扣CTBCCC匯費" = "Bank transaction fee(Remittance fee)-收單轉帳匯費"
+"COD匯費" = "Bank transaction fee(Remittance fee)-COD匯費"
 
 # 交易類型排序
 [entry.transaction_type_order]
