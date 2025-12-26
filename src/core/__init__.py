@@ -4,9 +4,9 @@
 """
 
 from . import datasources
-# from . import pipeline
+from . import pipeline
 
 __all__ = [
     'datasources',
-    # 'pipeline',
+    'pipeline',
 ]

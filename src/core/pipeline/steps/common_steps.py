@@ -9,7 +9,7 @@ from pathlib import Path
 
 from ..base import PipelineStep, StepResult, StepStatus
 from ..context import ProcessingContext, ValidationResult
-from offline_tasks.utils.logging import get_logger
+from src.utils.logging import get_logger
 
 
 class DataLoadingStep(PipelineStep):
@@ -313,7 +313,7 @@ class DataTransformStep(PipelineStep):
                 step_name=self.name,
                 status=StepStatus.SUCCESS,
                 data=result_df,
-                message=f"Transformed data successfully",
+                message="Transformed data successfully",
                 metadata={
                     'original_shape': original_shape,
                     'result_shape': result_df.shape

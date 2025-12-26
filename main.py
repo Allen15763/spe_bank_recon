@@ -21,8 +21,6 @@ manager = GoogleSheetsManager(
 )
 
 
-df_cud_rebate = manager.get_data('國泰回饋金')
-print(df_cud_rebate)
 
 
 with DuckDBManager(

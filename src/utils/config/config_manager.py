@@ -81,7 +81,7 @@ class ConfigManager:
                 project_root / 'config' / 'config.toml',
                 Path(__file__).parent.parent.parent / 'config' / 'config.toml',
                 Path.cwd() / 'config' / 'config.toml',
-                Path.cwd() / 'offline_tasks' / 'config' / 'config.toml',
+                Path.cwd() / 'src' / 'config' / 'config.toml',
             ]
             
             config_path = None
@@ -134,7 +134,7 @@ class ConfigManager:
         """設定預設配置"""
         self._config_data = {
             'general': {
-                'project_name': 'offline_tasks',
+                'project_name': 'spe_recon',
                 'version': '1.0.0',
             },
             'logging': {
@@ -256,6 +256,33 @@ class ConfigManager:
     def get_section(self, section: str) -> Dict[str, Any]:
         """獲取整個配置段落"""
         return self._config_data.get(section, {})
+    
+    def get_all(self, section: str, subsection: str = None) -> Dict[str, Any]:
+        """
+        獲取整個配置段落或子段落
+        
+        支援兩種調用方式：
+        - get_all('section') - 獲取整個 section
+        - get_all('section', 'subsection') - 獲取 section 下的 subsection
+        
+        Args:
+            section: 配置段落名稱
+            subsection: 子段落名稱（可選）
+            
+        Returns:
+            Dict[str, Any]: 配置字典
+            
+        Example:
+            >>> config_manager.get_all('dates')
+            {'current_period_start': '2025-10-01', ...}
+            >>> config_manager.get_all('installment', 'reports')
+            {'ub': './input/...'}
+        """
+        if subsection is None:
+            return self._config_data.get(section, {})
+        
+        section_data = self._config_data.get(section, {})
+        return section_data.get(subsection, {})
     
     def has_section(self, section: str) -> bool:
         """檢查是否存在配置段落"""

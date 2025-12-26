@@ -11,7 +11,7 @@ from datetime import datetime
 import pandas as pd
 import time
 
-from offline_tasks.utils.logging import get_logger
+from src.utils.logging import get_logger
 from .context import ProcessingContext
 
 

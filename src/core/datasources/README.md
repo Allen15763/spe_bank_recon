@@ -9,7 +9,7 @@ DataSources 模組提供了統一的數據源抽象層，支援多種數據格�
 ### 基本使用
 
 ```python
-from offline_tasks.core.datasources import DataSourceFactory, create_quick_source
+from src.core.datasources import DataSourceFactory, create_quick_source
 
 # 方式一：使用工廠自動識別檔案類型
 source = DataSourceFactory.create_from_file('data.xlsx')
@@ -70,7 +70,7 @@ DataSourcePool
 
 **使用範例：**
 ```python
-from offline_tasks.core.datasources import ExcelSource
+from src.core.datasources import ExcelSource
 
 # 從檔案創建
 source = ExcelSource.create_from_file('data.xlsx', sheet_name='Sheet1')
@@ -106,7 +106,7 @@ source.write_multiple_sheets({
 
 **使用範例：**
 ```python
-from offline_tasks.core.datasources import CSVSource
+from src.core.datasources import CSVSource
 
 # 從檔案創建
 source = CSVSource.create_from_file('data.csv', sep=',', encoding='utf-8')
@@ -135,7 +135,7 @@ source.append_data(new_df)
 
 **使用範例：**
 ```python
-from offline_tasks.core.datasources import ParquetSource
+from src.core.datasources import ParquetSource
 
 # 從檔案創建
 source = ParquetSource.create_from_file('data.parquet')
@@ -158,7 +158,7 @@ source.write(df, compression='snappy')
 ### 使用配置創建數據源
 
 ```python
-from offline_tasks.core.datasources import (
+from src.core.datasources import (
     DataSourceConfig, 
     DataSourceType, 
     DataSourceFactory
@@ -183,7 +183,7 @@ source = DataSourceFactory.create(config)
 ### 數據源池管理
 
 ```python
-from offline_tasks.core.datasources import DataSourcePool, DataSourceFactory
+from src.core.datasources import DataSourcePool, DataSourceFactory
 
 # 創建數據源池
 pool = DataSourcePool()
@@ -272,7 +272,7 @@ print(f"行數: {metadata['num_rows']}")
 ## 🔌 擴展新數據源
 
 ```python
-from offline_tasks.core.datasources import DataSource, DataSourceConfig
+from src.core.datasources import DataSource, DataSourceConfig
 
 class MySource(DataSource):
     """自定義數據源"""
@@ -294,7 +294,7 @@ class MySource(DataSource):
         return {}
 
 # 註冊到工廠
-from offline_tasks.core.datasources import DataSourceFactory, DataSourceType
+from src.core.datasources import DataSourceFactory, DataSourceType
 
 # 需要先在 DataSourceType 中添加類型
 DataSourceFactory.register_source(DataSourceType.MY_TYPE, MySource)

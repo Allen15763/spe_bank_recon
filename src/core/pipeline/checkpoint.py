@@ -30,7 +30,7 @@ import pandas as pd
 from .context import ProcessingContext
 from .pipeline import Pipeline
 from .base import StepResult, StepStatus
-from offline_tasks.utils import get_logger, config_manager
+from src.utils import get_logger, config_manager
 
 
 class CheckpointManager:
