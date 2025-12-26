@@ -1,0 +1,268 @@
+# ============================================================
+# SPE Bank Recon 配置檔案
+# 銀行對帳與分期報表處理任務配置
+# ============================================================
+
+[task]
+name = "bank_recon"
+description = "SPE 銀行對帳與分期報表處理任務"
+version = "1.0.0"
+
+[dates]
+# 預設日期範圍 (可從命令列覆寫)
+current_period_start = "2025-10-01"
+current_period_end = "2025-10-31"
+last_period_start = "2025-09-01"
+last_period_end = "2025-09-30"
+
+# 日期格式
+date_format = "%Y-%m-%d"
+period_format = "%Y%m"
+
+[database]
+path = "./db/bank_statements.duckdb"
+log_file = "./logs/duckdb_operations.log"
+log_level = "DEBUG"
+
+[output]
+path = "./output/"
+escrow_filename = "Escrow_recon_{period}_renew.xlsx"
+trust_account_filename = "filing data for Trust Account Fee Accrual-SPETW.xlsx"
+add_timestamp = false
+
+# ============================================================
+# 銀行配置
+# ============================================================
+
+[banks.cub]
+code = "cub"
+name = "國泰世華"
+enabled = true
+categories = ["individual", "nonindividual"]
+
+[banks.cub.tables]
+individual = "cub_individual_statement"
+nonindividual = "cub_nonindividual_statement"
+
+[banks.cub.fields]
+disbursement_date = "disbursement_date"
+request_amount = "request_amount"
+return_amount = "return_amount"
+handling_fee = "handling_fee"
+
+[banks.ctbc]
+code = "ctbc"
+name = "中國信託"
+enabled = true
+categories = ["installment", "noninstallment"]
+
+[banks.ctbc.tables]
+installment = "ctbc_installment"
+noninstallment = "ctbc_noninstallment"
+
+[banks.ctbc.fields]
+request_date = "request_date"
+disbursement_date = "disbursement_date"
+request_amount = "request_amount"
+adjustment_amount = "adjustment_amount"
+adjustment_handling_fee = "adjustment_handling_fee"
+invoice_amount = "invoice_amount"
+handling_fee = "handling_fee"
+
+[banks.nccc]
+code = "nccc"
+name = "NCCC"
+enabled = true
+categories = ["recon"]
+
+[banks.nccc.tables]
+payment = "nccc_payment_statement"
+recon = "nccc_recon_statement"
+
+[banks.nccc.fields]
+disbursement_date = "disbursement_date"
+request_date = "request_date"
+request_amount = "request_amount"
+handling_fee = "handling_fee"
+
+[banks.ub]
+code = "ub"
+name = "聯邦"
+enabled = true
+categories = ["installment", "noninstallment"]
+
+[banks.ub.tables]
+installment = "ub_installment_recon_statement"
+noninstallment = "ub_noninstallment_recon_statement"
+
+[banks.ub.fields]
+disbursement_date = "disbursement_date"
+request_date = "request_date"
+request_amount = "request_amount"
+handling_fee = "handling_fee"
+store_name = "store_name"
+
+[banks.ub.aggregation]
+target_stores = ["他行卡", "自行卡", "自行卡分期內含"]
+stop_row_identifier = "商店總計"
+main_company_name = "樂購蝦皮股份有限公司"
+adjustment_row_identifier = "調整 -- 退貨"
+
+[banks.taishi]
+code = "taishi"
+name = "台新"
+enabled = true
+categories = ["default"]
+
+[banks.taishi.tables]
+recon = "taishi_recon_statement"
+
+[banks.taishi.fields]
+disbursement_date = "disbursement_date"
+request_amount = "request_amount"
+disbursement_amount = "disbursement_amount"
+invoice_amount = "invoice_amount"
+tax_amount = "tax_amount"
+
+# ============================================================
+# 分期報表配置
+# ============================================================
+
+[installment]
+enabled = true
+google_sheets_enabled = true
+service_fee_sheet_name = "service_fee_rate"
+
+[installment.reports]
+# 報表路徑範本 ({period} 會被替換為期間，如 202510)
+ub = "./input/聯邦分期報表_{period}.xlsx"
+cub_individual = "./input/國泰分期報表_個人_{period}.xlsx"
+cub_nonindividual = "./input/國泰分期報表_法人_{period}.xls"
+ctbc = "./input/CTBC手續費_{period}.xlsx"
+nccc = "./input/NCCC分期報表_{period}.xls"
+taishi = "./input/台新分期報表_{period}.xls"
+
+[installment.report_specs]
+# 各銀行報表格式規格
+
+[installment.report_specs.cub]
+sheet_name = "B2B_TimesM"
+header_row = 3
+dtype = "str"
+
+[installment.report_specs.ctbc]
+# CTBC 有多個 sheet，需特殊處理
+process_all_sheets = true
+sheet_pattern = "\\d{4}"  # 符合年份的 sheet
+
+[installment.report_specs.nccc]
+header_row = 4
+dtype = "str"
+
+[installment.report_specs.ub]
+header_row = 3
+dtype = "str"
+
+[installment.report_specs.taishi]
+header_row = 2
+dtype = "str"
+sheets = [0, 1]  # 一般卡和 voucher
+
+[installment.transaction_type_mapping]
+"03" = "3期"
+"06" = "6期"
+"12" = "12期"
+"24" = "24期"
+
+# ============================================================
+# 發票配置
+# ============================================================
+
+[invoice]
+table_name = "invoice_details"
+date_field = "invoice_date"
+date_format = "%Y%m%d"
+
+[invoice.fields]
+category = "category"
+invoice_description = "invoice_description"
+amount_excl_tax = "amount_excl_tax"
+tax_amount = "tax_amount"
+amount_incl_tax = "amount_incl_tax"
+
+# ============================================================
+# 驗證規則
+# ============================================================
+
+[validation]
+tolerance = 1  # 金額容差
+enable_strict_mode = false
+
+[validation.rules]
+check_balance = true
+check_service_fee = true
+check_invoice_mapping = true
+log_mismatches = true
+
+# ============================================================
+# Pipeline 配置
+# ============================================================
+
+[pipeline]
+stop_on_error = true
+save_checkpoints = true
+checkpoint_dir = "./checkpoints"
+
+[pipeline.steps]
+# 可以禁用特定步驟（用於測試）
+load_parameters = true
+process_cub = true
+process_ctbc = true
+process_nccc = true
+process_ub = true
+process_taishi = true
+aggregate_escrow = true
+load_installment = true
+generate_trust_account = true
+
+# ============================================================
+# 輸出格式配置
+# ============================================================
+
+[output.bank_order]
+# 銀行在輸出中的順序
+escrow = [
+    "taishi",
+    "nccc",
+    "cub_nonindividual",
+    "cub_individual",
+    "ctbc_noninstallment",
+    "ctbc_installment",
+    "ub_noninstallment",
+    "ub_installment",
+]
+
+
+trust_account = [
+    "台新",
+    "NCCC",
+    "國泰",
+    "CTBC",
+    "聯邦"
+]
+
+[output.excel]
+# Excel 輸出設定
+freeze_panes = [1, 1]
+number_format = "#,##0"
+date_format = "yyyy-mm-dd"
+
+# ============================================================
+# 日誌配置
+# ============================================================
+
+[logging]
+level = "INFO"
+format = "detailed"
+log_to_console = true
+log_to_file = true
