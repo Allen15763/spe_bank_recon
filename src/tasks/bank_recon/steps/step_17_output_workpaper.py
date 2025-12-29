@@ -61,6 +61,11 @@ class OutputWorkpaperStep(PipelineStep):
                 if df_dfr is not None:
                     df_dfr.to_excel(writer, sheet_name='dfr', index=False)
                 
+                # DFR 整理明細，含餘額與當日變動、FRR的手續費與匯費
+                dfr_detail = context.get_auxiliary_data('dfr_with_balance')
+                if dfr_detail is not None:
+                    dfr_detail.to_excel(writer, sheet_name='dfr_detail', index=False)
+                
                 # DFR_WP
                 df_dfr_wp = context.get_auxiliary_data('dfr_wp')
                 if df_dfr_wp is not None:

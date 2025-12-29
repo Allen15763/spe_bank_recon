@@ -264,7 +264,18 @@ def dfr_balance_check(df_entry_long: pd.DataFrame,
     
     # 與 DFR 合併
     if 'Date' in df_result_dfr.columns:
-        df_check = df_result_dfr[['Date']].merge(daily_summary, on='Date', how='left')
+        # 過濾掉 'Total' 行並準備 DFR 日期資料
+        df_dfr_dates = df_result_dfr[df_result_dfr['Date'] != 'Total'][['Date']].copy()
+        
+        # 統一日期類型為 datetime
+        df_dfr_dates['Date'] = pd.to_datetime(df_dfr_dates['Date'], errors='coerce')
+        daily_summary['Date'] = pd.to_datetime(daily_summary['Date'], errors='coerce')
+        
+        # 過濾掉無效日期
+        df_dfr_dates = df_dfr_dates.dropna(subset=['Date'])
+        daily_summary = daily_summary.dropna(subset=['Date'])
+        
+        df_check = df_dfr_dates.merge(daily_summary, on='Date', how='left')
         df_check['entry_amount'] = df_check['entry_amount'].fillna(0)
     else:
         df_check = daily_summary

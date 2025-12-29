@@ -93,8 +93,6 @@ class ProcessDFRStep(PipelineStep):
             if len(df_result_dfr) == 0:
                 raise ValueError(f"DFR 無資料在日期範圍內: {beg_date} ~ {end_date}")
             
-            context.add_auxiliary_data('dfr_result', df_result_dfr)
-            
             self.logger.info(f"DFR 處理結果: {len(df_result_dfr)} 筆")
             self.logger.info(f"  Inbound 總額: {df_result_dfr['Inbound'].sum():,.0f}")
             self.logger.info(f"  Outbound 總額: {df_result_dfr['Outbound'].sum():,.0f}")
@@ -103,30 +101,39 @@ class ProcessDFRStep(PipelineStep):
             # =================================================================
             # 4. 取得手續費和匯費資料
             # =================================================================
-            # 從原始 DFR 取得 service_fee 和 remittance_fee 欄位
+            # 從原始 DFR 取得 handing_fee_col 和 remittance_fee 欄位
             date_col = dfr_columns.get('date_col', 'Date')
-            service_fee_col = dfr_columns.get('service_fee_col', 'service fee')
             remittance_fee_col = dfr_columns.get('remittance_fee_col', 'remittance fee')
             handing_fee_col = dfr_columns.get('handing_fee_col', 'handing_fee')
-            
+
             # 過濾日期範圍
-            df_filtered = df_raw.query(f"`{date_col}`.between(@beg_date, @end_date)").copy()
+            frr_handling_fee = (
+                context.get_auxiliary_data('frr_handling_fee')
+                .reset_index()
+                .assign(Date=lambda row: row[date_col].astype('string'))
+                .query(f"`{date_col}`.between(@beg_date, @end_date)")
+                .copy()
+            )
+            frr_remittance_fee = (
+                context.get_auxiliary_data('frr_remittance_fee')
+                .reset_index()
+                .assign(Date=lambda row: row[date_col].astype('string'))
+                .query(f"`{date_col}`.between(@beg_date, @end_date)")
+                .copy()
+            )
             
             # 提取手續費相關欄位
-            if service_fee_col in df_filtered.columns:
-                df_result_dfr['service_fee'] = df_filtered[service_fee_col].values
-            else:
-                df_result_dfr['service_fee'] = 0
-                
-            if remittance_fee_col in df_filtered.columns:
-                df_result_dfr['remittance_fee'] = df_filtered[remittance_fee_col].values
+            if remittance_fee_col in frr_remittance_fee.columns:
+                df_result_dfr['remittance_fee'] = frr_remittance_fee[remittance_fee_col].values
             else:
                 df_result_dfr['remittance_fee'] = 0
                 
-            if handing_fee_col in df_filtered.columns:
-                df_result_dfr['handing_fee'] = df_filtered[handing_fee_col].values
+            if handing_fee_col in frr_handling_fee.columns:
+                df_result_dfr['handing_fee'] = frr_handling_fee[handing_fee_col].values
             else:
                 df_result_dfr['handing_fee'] = 0
+                
+            context.add_auxiliary_data('dfr_result', df_result_dfr)
             
             # =================================================================
             # 5. 建立 DFR 工作底稿
@@ -139,8 +146,8 @@ class ProcessDFRStep(PipelineStep):
             # =================================================================
             # 6. 取得期初餘額並計算累計餘額
             # =================================================================
-            # 從 DFR 取得期初餘額（前一日的餘額）
-            balance_col = 'Balance'
+            # 從 DFR 取得期初餘額（前一日的餘額）；在OPS的DFR底稿有兩個balance欄位第二個才是銀行餘額!
+            balance_col = 'Balance.1'
             if balance_col in df_raw.columns:
                 # 取得期間開始前一天的餘額
                 df_before = df_raw[df_raw[date_col] < beg_date]

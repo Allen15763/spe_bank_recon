@@ -3,10 +3,9 @@ FRR (財務部) 資料處理工具
 處理財務部 Excel 檔案的讀取、清理和轉換
 """
 
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, Any
 import pandas as pd
 import numpy as np
-from datetime import datetime
 
 from src.utils import get_logger
 
@@ -74,6 +73,8 @@ def quick_clean_financial_data(df: pd.DataFrame, columns_config: Dict[str, Any])
         if col in df_clean.columns:
             df_clean[col] = pd.to_numeric(df_clean[col], errors='coerce').fillna(0)
     
+    # 移除Date空值(總計或原始底稿預留空列)
+    df_clean = df_clean.dropna(subset=['Date'], how='all')
     logger.info(f"FRR 資料清理完成: {len(df_clean)} 筆")
     return df_clean
 
@@ -104,8 +105,11 @@ def create_complete_date_range(df: pd.DataFrame, beg_date: str, end_date: str) -
     # 填補缺失值為 0
     numeric_cols = df_merged.select_dtypes(include=[np.number]).columns
     df_merged[numeric_cols] = df_merged[numeric_cols].fillna(0)
+
+    # 把Date欄位從datatime轉回date
+    df_merged['Date'] = pd.to_datetime(df_merged['Date']).dt.date
     
-    logger.info(f"日期範圍補齊完成: {beg_date} ~ {end_date}, 共 {len(df_merged)} 天")
+    logger.info(f"日期範圍補齊完成: {beg_date} ~ {end_date}, 共 {len(df_merged)} 天/筆")
     return df_merged
 
 
@@ -126,7 +130,7 @@ def convert_to_long_format(df: pd.DataFrame, bank_mapping: Dict[str, str]) -> pd
         date = row['Date']
         
         for bank_code, bank_name in bank_mapping.items():
-            # 取得各欄位值
+            # 取得各欄位值；該銀行沒有那個欄位則補0
             net_billing = row.get(f'{bank_code}_Net_Billing', 0)
             handling_fee = row.get(f'{bank_code}_Handling_Fee', 0)
             adjustment = row.get(f'{bank_code}_Adjustment', 0)

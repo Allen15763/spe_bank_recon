@@ -356,7 +356,7 @@ inbound_validation_cols = [
 
 # Outbound 欄位清單
 outbound_cols = [
-    "76512178905003",
+    76512178905003,
     "Digital Product Payment",
     "SVS",
     "715120012087 (OLD)\n715120019251 (NEW)",
@@ -373,7 +373,7 @@ outbound_extra_cols = [
 
 # Outbound 驗證欄位清單
 outbound_validation_cols = [
-    "76512178905003",
+    76512178905003,
     "Digital Product Payment",
     "SVS",
     "715120012087 (OLD)\n715120019251 (NEW)",
@@ -392,10 +392,13 @@ unsuccessful_ach_end_col = "Unsuccessful (ACH)\nCOD RR"
 spl_col = "企網自行轉帳\n20680100228850"
 interest_col = "存款息"
 interbank_col = "Interbank\ntransfer"
-adj_col = "adjustment"
-service_fee_col = "service fee"
-remittance_fee_col = "remittance fee"
-handing_fee_col = "handing_fee"
+adj_col = "調撥"
+withdraw_service_fee_col = "手續費"
+balance_col = "Balance.1"
+
+# 從FRR加入，用FRR算出來的total數
+remittance_fee_col = "Grand Total"
+handing_fee_col = "Grand Total"
 
 # ============================================================
 # Entry 配置 (Step 15-17)

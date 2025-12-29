@@ -6,7 +6,6 @@ DFR (TW Bank Balance) 資料處理工具
 from typing import Dict, List, Optional, Any
 import pandas as pd
 import numpy as np
-from datetime import datetime
 
 from src.utils import get_logger
 
@@ -166,6 +165,11 @@ def process_dfr_data(df: pd.DataFrame,
     interest = get_single_column_sum(columns_config.get('interest_col', '存款息'))
     interbank = get_single_column_sum(columns_config.get('interbank_col', 'Interbank\ntransfer'))
     offline_transfer = get_single_column_sum(columns_config.get('offline_transfer', 'offline transfer'))
+
+    adj = get_single_column_sum(columns_config.get('adj_col', '調撥'))
+    # 信託戶手續費提領
+    withdraw_service_fee = get_single_column_sum(columns_config.get('withdraw_service_fee_col', '手續費'))
+    balance = get_single_column_sum(columns_config.get('balance_col', 'Balance.1'))
     
     # 建立結果 DataFrame
     df_result = pd.DataFrame({
@@ -177,6 +181,9 @@ def process_dfr_data(df: pd.DataFrame,
         'interest': interest.values,
         'interbank': interbank.values,
         'offline_transfer': offline_transfer.values,
+        'adj': adj.values,
+        'withdraw_service_fee': withdraw_service_fee.values,
+        'balance': balance.values,
     })
     
     logger.info(f"DFR 資料處理完成: {len(df_result)} 筆")
@@ -184,7 +191,7 @@ def process_dfr_data(df: pd.DataFrame,
 
 
 def create_dfr_wp(df_result_dfr: pd.DataFrame,
-                  service_fee_col: str = 'service_fee',
+                  service_fee_col: str = 'withdraw_service_fee',
                   handing_fee_col: str = 'handing_fee',
                   remittance_fee_col: str = 'remittance_fee') -> pd.DataFrame:
     """
@@ -192,7 +199,7 @@ def create_dfr_wp(df_result_dfr: pd.DataFrame,
     
     Args:
         df_result_dfr: 處理後的 DFR DataFrame
-        service_fee_col: 服務費欄位名稱
+        withdraw_service_fee: 服務費欄位名稱
         handing_fee_col: 手續費欄位名稱
         remittance_fee_col: 匯費欄位名稱
         
@@ -248,8 +255,13 @@ def calculate_daily_movement(df_dfr: pd.DataFrame,
     outbound = df_dfr.get(outbound_col, 0)
     unsuccessful = df_dfr.get(unsuccessful_ach_col, 0)
     
-    # 每日變動 = Inbound - Outbound + Unsuccessful_ACH
-    daily_movement = inbound - outbound + unsuccessful
+    # # 每日變動 = Inbound - Outbound + Unsuccessful_ACH
+    # daily_movement = inbound - outbound + unsuccessful
+
+    # 取DFR Result的Inbound到Balance欄位前所有數字的加總
+    daily_movement = df_dfr.iloc[
+        :, df_dfr.columns.get_loc(inbound_col):df_dfr.columns.get_loc('balance')
+    ].sum(axis=1)
     
     return daily_movement
 
