@@ -15,12 +15,14 @@ from src.utils import get_logger
 from ..utils import (
     validate_frr_handling_fee,
     validate_frr_net_billing,
+    convert_flatIndex_to_multiIndex,
 )
 
 
 class ValidateDailyCheckStep(PipelineStep):
     """
     驗證 Daily Check 步驟
+        從trust_account_fee再topup調扣跟尾差(if any)後的驗證
     
     功能:
     1. 驗證 FRR 手續費與 Escrow Invoice
@@ -42,7 +44,9 @@ class ValidateDailyCheckStep(PipelineStep):
             # 取得資料
             df_frr_handling_fee = context.get_auxiliary_data('frr_handling_fee')
             df_frr_net_billing = context.get_auxiliary_data('frr_net_billing')
-            df_escrow_summary = context.get_auxiliary_data('escrow_summary')
+            df_escrow_summary = context.get_auxiliary_data('apcc_summary')
+            # 轉換成MutiIndex
+            df_escrow_summary = convert_flatIndex_to_multiIndex(df_escrow_summary)
             
             validation_results = {
                 'handling_fee_valid': True,
@@ -114,45 +118,18 @@ class ValidateDailyCheckStep(PipelineStep):
                 validation_results['warnings'].append("無法驗證 FRR 請款: 缺少必要資料")
             
             # =================================================================
-            # 3. 驗證 APCC 與 DFR 一致性
-            # =================================================================
-            df_apcc = context.get_auxiliary_data('apcc_acquiring_charge')
-            df_dfr_wp = context.get_auxiliary_data('dfr_wp')
-            
-            if df_apcc is not None and df_dfr_wp is not None:
-                self.logger.info("驗證 APCC 與 DFR 一致性...")
-                
-                # 取得 APCC 手續費總額
-                apcc_total = df_apcc['commission_fee'].sum() if 'commission_fee' in df_apcc.columns else 0
-                
-                # 取得 DFR handing_fee 總額
-                dfr_fee_total = df_dfr_wp['handing_fee'].sum() if 'handing_fee' in df_dfr_wp.columns else 0
-                
-                diff = abs(apcc_total - dfr_fee_total)
-                
-                if diff > 1:
-                    msg = f"APCC 與 DFR 手續費差異: {diff:,.0f}"
-                    validation_results['warnings'].append(msg)
-                    self.logger.warning(msg)
-                else:
-                    self.logger.info("APCC 與 DFR 手續費一致")
-            
-            # =================================================================
-            # 4. 建立驗證摘要報告
+            # 3. 建立驗證摘要報告
             # =================================================================
             validation_summary = pd.DataFrame({
                 'validation_item': [
                     'FRR 手續費',
                     'FRR 請款',
-                    'APCC 與 DFR',
                 ],
                 'status': [
                     '通過' if validation_results['handling_fee_valid'] else '有差異',
                     '通過' if validation_results['net_billing_valid'] else '有差異',
-                    '通過' if len([w for w in validation_results['warnings'] if 'APCC 與 DFR' in w]) == 0 else '有差異',
                 ],
                 'notes': [
-                    '',
                     '',
                     '',
                 ]

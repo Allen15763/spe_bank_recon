@@ -135,14 +135,30 @@ class LoadDailyCheckParamsStep(PipelineStep):
                     
                     context.add_auxiliary_data('ctbc_rebate_raw', df_ctbc_rebate)
                     
-                    # 從配置取得當月中信回饋金金額（若無則從 Google Sheets 取最後一筆）
+                    # 從配置取得當月中信回饋金金額（不從 Google Sheets 取最後一筆，因為沒有實際內扣日期）
                     ctbc_rebate_amt = self.config.get('business_rules', {}).get('ctbc_rebate_amt', 0)
-                    if ctbc_rebate_amt == 0 and len(df_ctbc_rebate) > 0:
-                        if 'Actual received amount' in df_ctbc_rebate.columns:
-                            ctbc_rebate_amt = df_ctbc_rebate['Actual received amount'].iloc[-1]
+                    # if ctbc_rebate_amt == 0 and len(df_ctbc_rebate) > 0:
+                    #     if 'Actual received amount' in df_ctbc_rebate.columns:
+                    #         ctbc_rebate_amt = df_ctbc_rebate['Actual received amount'].iloc[-1]
                     
                     context.set_variable('ctbc_rebate_amt', ctbc_rebate_amt)
                     self.logger.info(f"中信回饋金金額: {ctbc_rebate_amt:,.0f}")
+
+                    # =================================================================
+                    # 6. 從 Google Sheets 載入acquiring_charge_raw、APCC 手續費
+                    # =================================================================
+                    acquiring_charge_history_sheet = input_sheets.get('acquiring_charge_history_sheet', 
+                                                                      'acquiring_charge_raw')
+                    df_acquiring_charge_history = gs_manager.get_data(acquiring_charge_history_sheet)
+                    
+                    context.add_auxiliary_data('acquiring_charge_history', df_acquiring_charge_history)
+                    self.logger.info(f"載入acquiring_charge_raw: {df_acquiring_charge_history.shape}")
+
+                    apcc_history_sheet = input_sheets.get('apcc_history_sheet', 'APCC 手續費')
+                    df_apcc_history = gs_manager.get_data(apcc_history_sheet)
+                    
+                    context.add_auxiliary_data('apcc_history', df_apcc_history)
+                    self.logger.info(f"載入APCC 手續費: {df_apcc_history.shape}")
                     
                 except Exception as e:
                     self.logger.warning(f"載入 Google Sheets 資料失敗: {e}")
@@ -154,19 +170,23 @@ class LoadDailyCheckParamsStep(PipelineStep):
             # =================================================================
             business_rules = self.config.get('business_rules', {})
             
-            ops_adj_amt = business_rules.get('ops_adj_amt', 0)
+            ops_taishi_adj_amt = business_rules.get('ops_taishi_adj_amt', 0)
+            ops_cub_adj_amt = business_rules.get('ops_cub_adj_amt', 0)
+            ops_ctbc_adj_amt = business_rules.get('ops_ctbc_adj_amt', 0)
             cod_remittance_fee = business_rules.get('cod_remittance_fee', 0)
             ach_exps = business_rules.get('ach_exps', 0)
             taishi_rounding = business_rules.get('taishi_service_fee_rounding', 0)
             ctbc_rounding = business_rules.get('ctbc_service_fee_rounding', 0)
             
-            context.set_variable('ops_adj_amt', ops_adj_amt)
+            context.set_variable('ops_taishi_adj_amt', ops_taishi_adj_amt)
+            context.set_variable('ops_cub_adj_amt', ops_cub_adj_amt)
+            context.set_variable('ops_ctbc_adj_amt', ops_ctbc_adj_amt)
             context.set_variable('cod_remittance_fee', cod_remittance_fee)
             context.set_variable('ach_exps', ach_exps)
             context.set_variable('taishi_service_fee_rounding', taishi_rounding)
             context.set_variable('ctbc_service_fee_rounding', ctbc_rounding)
             
-            self.logger.info(f"調扣金額: {ops_adj_amt:,.0f}")
+            self.logger.info(f"調扣金額: {ops_taishi_adj_amt:,.0f}")
             self.logger.info(f"COD 匯費: {cod_remittance_fee:,.0f}")
             self.logger.info(f"ACH 費用: {ach_exps:,.0f}")
             
@@ -232,7 +252,7 @@ class LoadDailyCheckParamsStep(PipelineStep):
                     'frr_path': frr_path,
                     'dfr_path': dfr_path,
                     'charge_rates_count': len(context.get_variable('charge_rates', [])),
-                    'ops_adj_amt': ops_adj_amt,
+                    'ops_taishi_adj_amt': ops_taishi_adj_amt,
                     'loaded_at': datetime.now().isoformat()
                 }
             )

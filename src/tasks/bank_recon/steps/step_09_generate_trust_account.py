@@ -185,7 +185,7 @@ class GenerateTrustAccountStep(PipelineStep):
         
         # 驗證手續費
         val_fee = pd.DataFrame(df.T['小計'].iloc[5:])
-        val_fee.columns = ['trust_account_fee的小計手續費']
+        val_fee.columns = ['trust_account_fee的小計']
         val_fee['escrow_inv的手續費'] = [
             df_escrow.query("銀行.str.contains('taishi')")['對帳_手續費_總計'].sum(),
             df_escrow.query("銀行.str.contains('nccc')")['對帳_手續費_總計'].sum(),

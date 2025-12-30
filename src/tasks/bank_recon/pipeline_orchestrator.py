@@ -645,7 +645,7 @@ class BankReconTask:
                 
                 # 獲取警告
                 if context.has_warnings():
-                    warnings = context.warnings()
+                    warnings = context.warnings
                     if warnings:
                         self.logger.warning(f"執行過程中有 {len(warnings)} 個警告:")
                         for i, warning in enumerate(warnings, 1):

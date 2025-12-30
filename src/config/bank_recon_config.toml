@@ -462,7 +462,9 @@ exclude_zero_check = ["00.期初數", "09.發票已開立沖轉"]
 
 [business_rules]
 # 每月需要調整的參數
-ops_adj_amt = 97  # FRR 調扣，用於加回核算手續費發票數字
+ops_taishi_adj_amt = 97  # FRR 調扣，用於加回核算手續費發票數字，FRR上是負數要加負號
+ops_cub_adj_amt = 0
+ops_ctbc_adj_amt = 0
 cod_remittance_fee = 9740  # COD 匯費
 ach_exps = 9163359  # 中信 ACH eACH EDI
 
