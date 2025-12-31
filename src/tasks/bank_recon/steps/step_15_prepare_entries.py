@@ -15,6 +15,11 @@ from src.utils import get_logger
 from ..utils import (
     process_accounting_entries,
     validate_accounting_balance,
+    MonthlyConfig,
+    AccountingEntryProcessor,
+    validate_result,
+    dfr_balance_check,
+    summarize_balance_check,
 )
 
 
@@ -51,6 +56,8 @@ class PrepareEntriesStep(PipelineStep):
             df_result_dfr = context.get_auxiliary_data('dfr_result')
             cub_rebate = context.get_auxiliary_data('cub_rebate')
             received_ctbc_spt = context.get_auxiliary_data('received_ctbc_spt')
+            df_easyfund = pd.read_excel(context.get_variable('easyfund_path'), 
+                                        usecols=context.get_variable('easyfund_usecols'))
             
             if df_dfr_wp is None:
                 raise ValueError("缺少 DFR 工作底稿資料")
@@ -155,6 +162,75 @@ class PrepareEntriesStep(PipelineStep):
                 total = df_entry_temp[col].sum()
                 if abs(total) > 0:
                     self.logger.info(f"  {col}: {total:,.0f}")
+
+            print("初始化處理器...")
+
+            acquiring_amt: float | int = (
+                context.get_auxiliary_data('apcc_acquiring_charge')
+                .query("transaction_type=='小計'").commission_fee.values[0])
+
+            config_obj = MonthlyConfig(
+                2025, 10,
+                df_easyfund=df_easyfund,
+                apcc_acquiring_charge=acquiring_amt,
+                ach_exps=ach_exps,
+                cod_remittance_fee=cod_remittance_fee,
+                df_ctbc_rebate_amt=ctbc_rebate_amt,
+                beg_date=beg_date
+            )
+
+            processor = AccountingEntryProcessor(2025, 10, config_obj)  # 在實例化時導入config
+
+            # 執行完整處理
+            print("\n開始處理...")
+            df_entry_long = processor.process(df_entry_temp)
+
+            # 產生報告
+            processor.generate_report(df_entry_long)
+
+            # 驗證結果
+            print("\n驗證結果...")
+            # from example_usage import validate_result
+            validate_result(df_entry_long)
+
+            df_entry_long['accounting_date'] = df_entry_long['accounting_date'].fillna('期末會計調整')
+
+            type_order = {
+                '期初數': '00.期初數',
+                '內扣_ctbc_cc_匯費': '01.內扣_ctbc_cc_匯費',
+                'received_ctbc_spt': '02.received_ctbc_spt',
+                'received_ctbc_spt_退匯': '03.received_ctbc_spt_退匯',
+                'out_ctbc_spt': '04.out_ctbc_spt',
+                'other': '05.other',
+                'other_利息': '05.other_利息',
+                'spt': '06.spt',
+                'spe_withdrawal': '07.spe_withdrawal',
+                'spl手續費調整': '08.spl手續費調整',
+                '發票已開立沖轉': '09.發票已開立沖轉',
+            }
+            val_zero_excludes = [
+                '00.期初數',
+                '09.發票已開立沖轉',
+            ]
+
+            df_entry_long_temp = df_entry_long.copy()
+            df_entry_long_temp['transaction_type'] = (df_entry_long_temp['transaction_type']
+                                                      .map(type_order)
+                                                      .fillna(df_entry_long['transaction_type'])
+                                                      )
+
+            result_check_dfr = dfr_balance_check(df_entry_long_temp, df_result_dfr)
+            summary_check_dfr = summarize_balance_check(result_check_dfr)
+
+            result_check_gategory = df_entry_long_temp.query("~transaction_type.isin(@val_zero_excludes)").pivot_table(
+                index=['accounting_date'], 
+                columns='transaction_type', values='amount', aggfunc='sum', margins=True, margins_name='Total'
+            ).reset_index()
+
+            df_big_entry = df_entry_long_temp.pivot_table(
+                index=['account_no', 'account_desc', 'transaction_type'], 
+                columns='accounting_date', values='amount', aggfunc='sum', margins=True, margins_name='Total'
+            ).reset_index()
             
             # =================================================================
             # 7. 摘要

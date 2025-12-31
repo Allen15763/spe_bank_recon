@@ -40,6 +40,18 @@ class CalculateAPCCStep(PipelineStep):
     3. 套用調扣調整
     4. 套用尾差調整
     5. 生成 df_apcc_acquiring_charge
+
+    - Step 13，APCC手續費與Summary分析表:
+        - 完成apcc_acquiring_charge(APCC手續費)，為SPE對SPT的charge之估算。
+        - context.get_auxiliary_data('apcc_acquiring_charge_DW') >> **DW資料(APCC 手續費)，確認後上傳至雲表。**
+        - 完成df_apcc_summary_fin，為APCC手續費的請款數加上trust_account_fee的service fee(topup後)與相關手續費比率的整合分析表
+        - context.get_auxiliary_data('apcc_summary_long') >> **DW資料(acquiring_charge_raw)，確認後上傳至雲表。**
+        - context.get_auxiliary_data('apcc_summary')，topuped trust_account_fee
+        - context.get_auxiliary_data('df_summary_long_without_spe_charge', df_summary_long_without_spe_charge)，
+            沒有SPE資訊的summary
+        - context.get_auxiliary_data('df_apcc_summary_fin', df_apcc_summary_fin)，含SPE資訊的summary
+        - net_cc_rev、spe_charge_proportion、acquiring_proportion，雲表樞紐的分析資料源，更新DW資料(APCC 手續費、acquiring_charge_raw)後自動刷新
+
     """
     
     def __init__(self, **kwargs):

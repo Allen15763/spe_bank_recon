@@ -58,9 +58,10 @@ from .apcc_calculator import (
 )
 
 from .entry_transformer import (
-    AccountingEntryTransformer,
     process_accounting_entries,
     validate_accounting_balance,
+    AccountingEntryTransformer,
+    MonthlyConfig,
 )
 
 from .entry_processor import (
@@ -121,9 +122,10 @@ __all__ = [
     'convert_flatIndex_to_multiIndex',
     
     # Entry Transformer
-    'AccountingEntryTransformer',
     'process_accounting_entries',
     'validate_accounting_balance',
+    'AccountingEntryTransformer',
+    'MonthlyConfig',
     
     # Entry Processor
     'AccountingEntryProcessor',

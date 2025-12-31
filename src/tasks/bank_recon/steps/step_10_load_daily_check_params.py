@@ -206,11 +206,13 @@ class LoadDailyCheckParamsStep(PipelineStep):
             entry_config = self.config.get('entry', {})
             
             easyfund_path = entry_config.get('easyfund', {}).get('path', './input/仲信手續費_2025.xlsx')
+            easyfund_usecols = entry_config.get('easyfund', {}).get('usecols')
             accounts_config = entry_config.get('accounts', {})
             accounts_detail = entry_config.get('accounts_detail', {})
             type_order = entry_config.get('transaction_type_order', {})
             
             context.set_variable('easyfund_path', easyfund_path)
+            context.set_variable('easyfund_usecols', easyfund_usecols)
             context.set_variable('accounts_config', accounts_config)
             context.set_variable('accounts_detail', accounts_detail)
             context.set_variable('transaction_type_order', type_order)
