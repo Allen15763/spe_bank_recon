@@ -212,6 +212,9 @@ class AggregateEscrowStep(PipelineStep):
             # self.logger.info(f"成功輸出 Escrow Excel: {output_file}")
 
             tables: list = context.get_variable('bank_tables')
+            # 排除這邊用不到的銀行表
+            tables = [i for i in tables if i not in ['ub_remittance_fee_installment', 
+                                                     'ub_remittance_fee_noninstallment']]
             escrow_inv_raw = self._get_escrow_inv_raw(tables, db_path, log_file)
             
             # ===================================================================
