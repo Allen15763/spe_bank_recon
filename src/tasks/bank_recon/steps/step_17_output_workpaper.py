@@ -49,140 +49,81 @@ class OutputWorkpaperStep(PipelineStep):
             
             output_files = []
             
-            # # =================================================================
-            # # 1. 輸出 Daily Check Excel
-            # # =================================================================
-            # daily_check_path = output_dir / daily_check_filename
-            # self.logger.info(f"輸出 Daily Check: {daily_check_path}")
+            # =================================================================
+            # 寫入 Google Sheets
+            # =================================================================
+            gs_config = self.config.get('google_sheets', {})
             
-            # with pd.ExcelWriter(daily_check_path, engine='openpyxl') as writer:
-            #     # DFR
-            #     df_dfr = context.get_auxiliary_data('dfr_raw')
-            #     if df_dfr is not None:
-            #         df_dfr.to_excel(writer, sheet_name='dfr', index=False)
-                
-            #     # DFR 整理明細，含(dfr_result加上)餘額與當日變動、FRR的手續費與匯費
-            #     dfr_detail = context.get_auxiliary_data('dfr_with_balance')
-            #     if dfr_detail is not None:
-            #         dfr_detail.to_excel(writer, sheet_name='dfr_detail', index=False)
-                
-            #     # DFR_WP
-            #     df_dfr_wp = context.get_auxiliary_data('dfr_wp')
-            #     if df_dfr_wp is not None:
-            #         df_dfr_wp.to_excel(writer, sheet_name='dfr_wp', index=False)
-                
-            #     # APCC Acquiring Charge； ('apcc_acquiring_charge_DW') for 雲表
-            #     df_apcc = context.get_auxiliary_data('apcc_acquiring_charge')
-            #     if df_apcc is not None:
-            #         df_apcc.to_excel(writer, sheet_name='APCC手續費', index=False)
-                
-            #     # APCC Validate FRR
-            #     df_apcc_validate = context.get_auxiliary_data('apcc_validate_frr')
-            #     if df_apcc_validate is not None:
-            #         df_apcc_validate.to_excel(writer, sheet_name='apcc_validate_frr', index=False)
-                
-            #     # Summary；上去gsheet後再拉下來的
-            #     df_summary = context.get_auxiliary_data('df_apcc_summary_fin')
-            #     if df_summary is not None:
-            #         df_summary.to_excel(writer, sheet_name='summary_01', index=False)
+            if gs_config.get('enabled', True):
+                try:
+                    cred_path = config_manager.get('general', 'cred_path')
+                    spreadsheet_url = gs_config.get('spreadsheet_url')
+                    
+                    gs_manager = GoogleSheetsManager(
+                        credentials_path=cred_path,
+                        spreadsheet_url=spreadsheet_url
+                    )
+                    
+                    output_config = gs_config.get('output', {})
+                    modes_config = gs_config.get('output', {}).get('modes', {})
+                    
+                    # 3.1 寫入 acquiring_charge_raw (append)
+                    acquiring_sheet = output_config.get('acquiring_charge_raw_sheet', 'acquiring_charge_raw')
+                    df_apcc_summary_long = context.get_auxiliary_data('apcc_summary_long')
+                    
+                    if df_apcc_summary_long is not None:
+                        is_append = modes_config.get('acquiring_charge_raw', 'append') == 'append'
+                        
+                        # 準備資料
+                        df_to_write = df_apcc_summary_long.copy()
+                        df_to_write['period'] = current_month
+                        df_to_write['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        
+                        # 會計確認無誤後才上傳
+                        # gs_manager.write_data(df_to_write, acquiring_sheet, is_append=is_append)
+                        self.logger.info(f"已寫入 Google Sheets: {acquiring_sheet}")
+                    
+                    # 3.2 寫入 大entry_raw (append)
+                    big_entry_sheet = output_config.get('big_entry_raw_sheet', '大entry_raw')
+                    df_entry_long = context.get_auxiliary_data('entry_long')
+                    
+                    if df_entry_long is not None:
+                        is_append = modes_config.get('big_entry_raw', 'append') == 'append'
+                        
+                        # 準備資料
+                        df_to_write = df_entry_long.copy()
+                        df_to_write['period'] = current_month
+                        df_to_write['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        
+                        # 會計確認無誤後才上傳
+                        # gs_manager.write_data(df_to_write, big_entry_sheet, is_append=is_append)
+                        self.logger.info(f"已寫入 Google Sheets: {big_entry_sheet}")
+                    
+                    # 3.3 寫入 acquiring_charge_sum_display (overwrite)
+                    display_sheet = output_config.get('acquiring_charge_sum_display_sheet', 
+                                                      'acquiring_charge_sum_display')
+                    df_summary = context.get_auxiliary_data('df_apcc_summary_fin')
+                    
+                    if df_summary is not None:
+                        is_append = modes_config.get('acquiring_charge_sum_display', 'overwrite') == 'append'
+                        gs_manager.write_data(df_summary.astype(object).fillna(''), 
+                                              display_sheet, 
+                                              is_append=is_append,
+                                              clear_range="A1:Q9")
 
-            #     # Trust account fee回補normal手續費與調扣的版本
-            #     df_apcc_topup = context.get_auxiliary_data('apcc_summary')
-            #     if df_apcc_topup is not None:
-            #         df_apcc_topup.to_excel(writer, sheet_name='Trust account fee回補手續費', index=False)
+                        self.logger.info(f"已寫入 Google Sheets: {display_sheet}")
 
-            #     df_trust_account_fee = context.get_auxiliary_data('trust_account_fee')
-            #     if df_trust_account_fee is not None:
-            #         df_trust_account_fee.to_excel(writer, sheet_name='trust_account_fee', index=False)
-
-            #     # context.get_auxiliary_data('trust_account_validation')
-                
-            #     # Validate FRR
-            #     df_validate_summary = context.get_auxiliary_data('validation_summary')
-            #     if df_validate_summary is not None:
-            #         df_validate_summary.to_excel(writer, sheet_name='validate_frr_summary', index=False)
-
-            #     # Validate FRR Handling Fee
-            #     df_validate_handling = context.get_auxiliary_data('validate_frr_handling_fee')
-            #     if df_validate_handling is not None:
-            #         df_validate_handling.to_excel(writer, sheet_name='validate_frr_handling_fee', index=False)
-                
-            #     # Validate FRR Net Billing
-            #     df_validate_billing = context.get_auxiliary_data('validate_frr_net_billing')
-            #     if df_validate_billing is not None:
-            #         df_validate_billing.to_excel(writer, sheet_name='validate_frr_net_billing', index=False)
-                
-            #     # FRR Handling Fee
-            #     df_frr_handling = context.get_auxiliary_data('frr_handling_fee')
-            #     if df_frr_handling is not None:
-            #         df_frr_handling.to_excel(writer, sheet_name='frr_handling_fee')
-                
-            #     # FRR Remittance Fee
-            #     df_frr_remittance = context.get_auxiliary_data('frr_remittance_fee')
-            #     if df_frr_remittance is not None:
-            #         df_frr_remittance.to_excel(writer, sheet_name='frr_remittance_fee')
-
-            #     # FRR Long Format
-            #     df_frr_long = context.get_auxiliary_data('frr_long_format')
-            #     if df_frr_long is not None:
-            #         df_frr_long.to_excel(writer, sheet_name='extracted_from_frr', index=False)
-
-            #     # 歷史紀錄參考
-            #     acquiring_charge_history = context.get_auxiliary_data('acquiring_charge_history')
-            #     if acquiring_charge_history is not None:
-            #         acquiring_charge_history.to_excel(writer, sheet_name='acquiring_charge_history', index=False)
-
-            #     apcc_history = context.get_auxiliary_data('apcc_history')
-            #     if apcc_history is not None:
-            #         apcc_history.to_excel(writer, sheet_name='APCC手續費_history', index=False)
-            
-            # output_files.append(str(daily_check_path))
-            # self.logger.info("Daily Check Excel 輸出完成")
-            
-            # # =================================================================
-            # # 2. 輸出 Entry Excel
-            # # =================================================================
-            # entry_path = output_dir / entry_filename
-            # self.logger.info(f"輸出 Entry: {entry_path}")
-            
-            # with pd.ExcelWriter(entry_path, engine='openpyxl') as writer:
-            #     # 大 Entry
-            #     df_big_entry = context.get_auxiliary_data('big_entry')
-            #     if df_big_entry is not None:
-            #         df_big_entry.to_excel(writer, sheet_name='大entry', index=False)
-                
-            #     # DFR 驗證
-            #     df_balance_check = context.get_auxiliary_data('dfr_balance_check')
-            #     if df_balance_check is not None:
-            #         df_balance_check.to_excel(writer, sheet_name='104171 vs DFR', index=False)
-                
-            #     # 分類驗證
-            #     df_entry_validation = context.get_auxiliary_data('category_validation')
-            #     if df_entry_validation is not None:
-            #         pd.DataFrame([df_entry_validation]).to_excel(writer, sheet_name='分類驗證', index=False)
-
-            #     # 進Entry Transformer前的驗證
-            #     entry_source_agg = context.get_auxiliary_data('entry_validation')
-            #     if df_balance_check is not None:
-            #         pd.DataFrame(
-            #             entry_source_agg, index=[0]
-            #         ).to_excel(writer, sheet_name='Entry Source Validation', index=False)
-                
-            #     # Entry Temp
-            #     df_entry_temp = context.get_auxiliary_data('entry_temp')
-            #     if df_entry_temp is not None:
-            #         df_entry_temp.to_excel(writer, sheet_name='entry_temp', index=False)
-                
-            #     # Entry Long
-            #     df_entry_long = context.get_auxiliary_data('entry_long_temp')
-            #     if df_entry_long is not None:
-            #         df_entry_long.to_excel(writer, sheet_name='entry_long_temp', index=False)
-            
-            # output_files.append(str(entry_path))
-            # self.logger.info("Entry Excel 輸出完成")
+                    # 各項指標的樞紐分析表原始資料，上傳雲表
+                    self._write_analysis_materials(context, gs_manager)
+                    # 輸出到Excel的大entry同步更新至雲表
+                    self._write_big_entry(context, gs_manager)
+                    
+                except Exception as e:
+                    self.logger.warning(f"寫入 Google Sheets 失敗: {e}")
+                    context.add_warning(f"Google Sheets 寫入失敗: {e}")
 
             # =================================================================
-            # 1. 寫入 Excel
+            # 寫入 Excel
             # =================================================================
             entry_path = output_dir / entry_filename
             self.logger.info(f"輸出 Entry: {entry_path}")
@@ -246,7 +187,7 @@ class OutputWorkpaperStep(PipelineStep):
                     df_apcc_validate.to_excel(writer, sheet_name='apcc_validate_frr', index=False)
                 
                 # Summary；上去gsheet後再拉下來的
-                df_summary = context.get_auxiliary_data('df_apcc_summary_fin')
+                df_summary = gs_manager.get_data('acquiring_charge_sum_display', 'A1:Q11')  # ('df_apcc_summary_fin')
                 if df_summary is not None:
                     df_summary.to_excel(writer, sheet_name='summary_01', index=False)
 
@@ -304,69 +245,7 @@ class OutputWorkpaperStep(PipelineStep):
             self.logger.info("Entry Excel 輸出完成")
             
             # =================================================================
-            # 3. 寫入 Google Sheets
-            # =================================================================
-            gs_config = self.config.get('google_sheets', {})
-            
-            if gs_config.get('enabled', True):
-                try:
-                    cred_path = config_manager.get('general', 'cred_path')
-                    spreadsheet_url = gs_config.get('spreadsheet_url')
-                    
-                    gs_manager = GoogleSheetsManager(
-                        credentials_path=cred_path,
-                        spreadsheet_url=spreadsheet_url
-                    )
-                    
-                    output_config = gs_config.get('output', {})
-                    modes_config = gs_config.get('output', {}).get('modes', {})
-                    
-                    # 3.1 寫入 acquiring_charge_raw (append)
-                    acquiring_sheet = output_config.get('acquiring_charge_raw_sheet', 'acquiring_charge_raw')
-                    df_apcc_summary_long = context.get_auxiliary_data('apcc_summary_long')
-                    
-                    if df_apcc_summary_long is not None:
-                        is_append = modes_config.get('acquiring_charge_raw', 'append') == 'append'
-                        
-                        # 準備資料
-                        df_to_write = df_apcc_summary_long.copy()
-                        df_to_write['period'] = current_month
-                        df_to_write['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                        
-                        gs_manager.write_data(df_to_write, acquiring_sheet, is_append=is_append)
-                        self.logger.info(f"已寫入 Google Sheets: {acquiring_sheet}")
-                    
-                    # 3.2 寫入 大entry_raw (append)
-                    big_entry_sheet = output_config.get('big_entry_raw_sheet', '大entry_raw')
-                    df_entry_long = context.get_auxiliary_data('entry_long')
-                    
-                    if df_entry_long is not None:
-                        is_append = modes_config.get('big_entry_raw', 'append') == 'append'
-                        
-                        # 準備資料
-                        df_to_write = df_entry_long.copy()
-                        df_to_write['period'] = current_month
-                        df_to_write['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                        
-                        gs_manager.write_data(df_to_write, big_entry_sheet, is_append=is_append)
-                        self.logger.info(f"已寫入 Google Sheets: {big_entry_sheet}")
-                    
-                    # 3.3 寫入 acquiring_charge_sum_display (overwrite)
-                    display_sheet = output_config.get('acquiring_charge_sum_display_sheet', 
-                                                      'acquiring_charge_sum_display')
-                    df_summary = context.get_auxiliary_data('apcc_summary')
-                    
-                    if df_summary is not None:
-                        is_append = modes_config.get('acquiring_charge_sum_display', 'overwrite') == 'append'
-                        gs_manager.write_data(df_summary, display_sheet, is_append=is_append)
-                        self.logger.info(f"已寫入 Google Sheets: {display_sheet}")
-                    
-                except Exception as e:
-                    self.logger.warning(f"寫入 Google Sheets 失敗: {e}")
-                    context.add_warning(f"Google Sheets 寫入失敗: {e}")
-            
-            # =================================================================
-            # 4. 摘要
+            # 摘要
             # =================================================================
             self.logger.info("\n" + "=" * 60)
             self.logger.info("工作底稿輸出完成")
@@ -399,3 +278,58 @@ class OutputWorkpaperStep(PipelineStep):
                 error=e,
                 message=str(e)
             )
+        
+    def _write_analysis_materials(self, context, service):
+        # Summary的累積分析資訊
+        try:
+            sheet_name = 'cc_net_rev'
+            service.write_data(
+                context.get_auxiliary_data('net_cc_rev').astype(object).fillna(''), 
+                sheet_name=sheet_name, 
+                is_append=False
+            )
+            self.logger.info(f"已寫入 Google Sheets: {sheet_name}")
+        except Exception as e:
+            self.logger.error(f"輸出{sheet_name}失敗: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
+
+        try:
+            sheet_name = 'spe_proportion'
+            service.write_data(
+                context.get_auxiliary_data('spe_charge_proportion').astype(object).fillna(''), 
+                sheet_name=sheet_name, 
+                is_append=False,
+                clear_range="A:F"
+            )
+        except Exception as e:
+            self.logger.error(f"輸出{sheet_name}失敗: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
+
+        try:
+            sheet_name = 'wp_proportion'
+            service.write_data(
+                context.get_auxiliary_data('acquiring_proportion').astype(object).fillna(''), 
+                sheet_name=sheet_name, 
+                is_append=False,
+                clear_range="A:E"
+            )
+        except Exception as e:
+            self.logger.error(f"輸出{sheet_name}失敗: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
+
+    def _write_big_entry(self, context, service):
+        try:
+            sheet_name = '大entry_display'
+            service.write_data(
+                context.get_auxiliary_data('big_entry').astype(object).fillna(''), 
+                sheet_name=sheet_name, 
+                is_append=False
+            )
+        except Exception as e:
+            self.logger.error(f"輸出{sheet_name}失敗: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
+        
