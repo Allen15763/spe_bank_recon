@@ -1,6 +1,9 @@
 # ============================================================
 # SPE Bank Recon 配置檔案
 # 銀行對帳與分期報表處理任務配置
+
+# - **Manual的部分務必檢查後修改**
+
 # ============================================================
 
 [task]
@@ -9,11 +12,16 @@ description = "SPE 銀行對帳與分期報表處理任務"
 version = "2.0.0"
 
 [dates]
-# 預設日期範圍 (可從命令列覆寫)
-current_period_start = "2025-10-01"
-current_period_end = "2025-10-31"
-last_period_start = "2025-09-01"
-last_period_end = "2025-09-30"
+# 預設日期範圍 (可從命令列覆寫) - Manual
+# current_period_start = "2025-10-01"
+# current_period_end = "2025-10-31"
+# last_period_start = "2025-09-01"
+# last_period_end = "2025-09-30"
+
+current_period_start = "2025-11-01"
+current_period_end = "2025-11-30"
+last_period_start = "2025-10-01"
+last_period_end = "2025-10-31"
 
 # 日期格式
 date_format = "%Y-%m-%d"
@@ -141,7 +149,8 @@ nccc = "./input/NCCC分期報表_{period}.xls"
 taishi = "./input/台新分期報表_{period}.xls"
 
 [installment.reports.cub]
-cub_individual = "./input/國泰分期報表_個人_{period}.xlsx"
+cub_individual = "./input/國泰分期報表_個人_{period}.xls"
+# "./input/國泰分期報表_個人_{period}.xlsx"
 cub_nonindividual = "./input/國泰分期報表_法人_{period}.xls"
 
 [installment.report_specs]
@@ -407,12 +416,15 @@ handing_fee_col = "Grand Total"
 [entry]
 enabled = true
 
+# 月度配置檔案路徑 (期初數、特殊分錄等每月變動的配置)
+monthly_config_path = "./src/config/bank_recon_entry_monthly.toml"
+
 # 仲信手續費檔案
 [entry.easyfund]
 path = "./input/仲信手續費_2025.xlsx"
 usecols = "A:K"
 
-# 會計科目映射
+# 會計科目映射 (靜態配置，較少變動)
 [entry.accounts]
 "101150" = "Cash in Bank - Fubon TWD 2087"
 "104171" = "Escrow Bank - CTBC TWD 4935"
@@ -438,7 +450,7 @@ APCC_ACH = "Commission charge-RC-SPTTW-ACH/eACH/EDI"
 "內扣CTBCCC匯費" = "Bank transaction fee(Remittance fee)-收單轉帳匯費"
 "COD匯費" = "Bank transaction fee(Remittance fee)-COD匯費"
 
-# 交易類型排序
+# 交易類型排序 (靜態配置)
 [entry.transaction_type_order]
 "期初數" = "00.期初數"
 "內扣_ctbc_cc_匯費" = "01.內扣_ctbc_cc_匯費"
@@ -452,34 +464,134 @@ APCC_ACH = "Commission charge-RC-SPTTW-ACH/eACH/EDI"
 "spl手續費調整" = "08.spl手續費調整"
 "發票已開立沖轉" = "09.發票已開立沖轉"
 
-# 排除零值驗證的交易類型
+# 驗證配置
 [entry.validation]
+# 排除零值驗證的交易類型
 exclude_zero_check = ["00.期初數", "09.發票已開立沖轉"]
+# 餘額檢核容差
+balance_tolerance = 1.0
+# 是否跳過零金額分錄
+skip_zero_amount = false
+# 金額小數位數
+amount_decimal_places = 2
+
+# 分錄映射規則 (靜態配置，定義寬表格欄位到長表格分錄的轉換)
+[[entry.entry_mapping]]
+column = "acc_200208_ReceivedCTBCSPT_negative"
+account_no = "200208"
+transaction_type = "received_ctbc_spt"
+
+[[entry.entry_mapping]]
+column = "acc_200208_ReceivedCTBCSPT_positive"
+account_no = "200208"
+transaction_type = "received_ctbc_spt"
+
+[[entry.entry_mapping]]
+column = "acc_200701_OutCTBCSPT"
+account_no = "200701"
+transaction_type = "out_ctbc_spt"
+
+[[entry.entry_mapping]]
+column = "acc_200701_ReceivedCTBCSPT_negative"
+account_no = "200701"
+transaction_type = "received_ctbc_spt"
+
+[[entry.entry_mapping]]
+column = "acc_200701_ReceivedCTBCSPT退匯"
+account_no = "200701"
+transaction_type = "received_ctbc_spt_退匯"
+
+[[entry.entry_mapping]]
+column = "acc_530006_收單_SPE"
+account_no = "530006"
+transaction_type = "received_ctbc_spt"
+desc_key = "收單_SPE"
+
+[[entry.entry_mapping]]
+column = "acc_530006_內扣CTBCCC匯費"
+account_no = "530006"
+transaction_type = "內扣_ctbc_cc_匯費"
+desc_key = "內扣CTBCCC匯費"
+
+[[entry.entry_mapping]]
+column = "acc_101150_Received_CTBC_SPT"
+account_no = "101150"
+transaction_type = "received_ctbc_spt"
+
+[[entry.entry_mapping]]
+column = "acc_104171_OutCTBCSPT"
+account_no = "104171"
+transaction_type = "out_ctbc_spt"
+
+[[entry.entry_mapping]]
+column = "acc_104171_ReceivedCTBCSPT"
+account_no = "104171"
+transaction_type = "received_ctbc_spt"
+
+[[entry.entry_mapping]]
+column = "acc_104171_ReceivedCTBCSPT退匯"
+account_no = "104171"
+transaction_type = "received_ctbc_spt_退匯"
+
+[[entry.entry_mapping]]
+column = "acc_104171_內扣CTBCCC匯費"
+account_no = "104171"
+transaction_type = "內扣_ctbc_cc_匯費"
+
+[[entry.entry_mapping]]
+column = "acc_104171_others"
+account_no = "104171"
+transaction_type = "other"
+
+[[entry.entry_mapping]]
+column = "acc_104171_others_利息"
+account_no = "104171"
+transaction_type = "other_利息"
+
+[[entry.entry_mapping]]
+column = "acc_999995_others"
+account_no = "999995"
+transaction_type = "other"
+
+[[entry.entry_mapping]]
+column = "acc_440001_interest"
+account_no = "440001"
+transaction_type = "other_利息"
+
+[[entry.entry_mapping]]
+column = "acc_111302_interest"
+account_no = "111302"
+transaction_type = "other_利息"
 
 # ============================================================
-# 業務規則配置 (每月調整)
+# 業務規則配置 (每月調整-Manual)
 # ============================================================
 
 [business_rules]
 # 每月需要調整的參數
-ops_taishi_adj_amt = 97  # FRR 調扣，用於加回核算手續費發票數字，FRR上是負數要加負號
+# FRR 調扣，用於加回核算手續費發票數字，FRR上是負數要加負號
+ops_taishi_adj_amt = 0
 ops_cub_adj_amt = 0
 ops_ctbc_adj_amt = 0
-cod_remittance_fee = 9740  # COD 匯費
-ach_exps = 9163359  # 中信 ACH eACH EDI
+
+# COD 匯費
+cod_remittance_fee = 9910  # 9740  
+ach_exps = 9480145  # 9163359  # 中信 ACH eACH EDI
 
 # 手續費尾差調整 (調成跟發票一致)
 taishi_service_fee_rounding = 0
 ctbc_service_fee_rounding = 0
 
 # 中信回饋金（若當月無則設為 0）
-ctbc_rebate_amt = 0
+ctbc_rebate_amt = 524583  # 0
 
 # 特殊日期交易配置 (如 received_ctbc_spt)
+# e.g. 1127-Received CTBC-SPT，by Email confirmed to topup
 [business_rules.special_transactions]
 # 格式: "YYYY-MM-DD" = amount
 # 例如: 
 "2025-10-29" = 181432345
+"2025-11-27" =  175204850
 
 # ============================================================
 # Google Sheets 配置

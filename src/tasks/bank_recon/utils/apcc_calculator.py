@@ -70,6 +70,8 @@ def get_apcc_service_fee_charged(df: pd.DataFrame,
     # 計算手續費
     df_copy['commission_fee'] = df_copy['subtotal'] * df_copy['charge_rate']
     df_copy['commission_fee'] = df_copy['commission_fee'].round(0)
+    # Subtotal
+    df_copy.iloc[-1, df_copy.columns.get_loc('commission_fee')] = df_copy['commission_fee'].sum()
     
     logger.info("APCC 手續費計算完成")
     return df_copy

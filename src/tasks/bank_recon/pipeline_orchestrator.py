@@ -451,14 +451,15 @@ class BankReconTask:
         # Step 15: 準備會計分錄
         pipeline.add_step(PrepareEntriesStep(
             name="Prepare_Entries",
-            description="整理會計科目、處理回饋金、生成寬格式分錄",
+            description="整理會計科目、處理回饋金、生成寬格式分錄、轉換為長格式分錄、DFR 餘額核對、生成 pivot 報表",
+            config=self.config
         ))
         
-        # Step 16: 生成大 Entry
-        pipeline.add_step(GenerateBigEntryStep(
-            name="Generate_Big_Entry",
-            description="轉換為長格式分錄、DFR 餘額核對、生成 pivot 報表",
-        ))
+        # # Step 16: 生成大 Entry
+        # pipeline.add_step(GenerateBigEntryStep(
+        #     name="Generate_Big_Entry",
+        #     description="轉換為長格式分錄、DFR 餘額核對、生成 pivot 報表",
+        # ))
         
         # Step 17: 輸出工作底稿
         pipeline.add_step(OutputWorkpaperStep(
