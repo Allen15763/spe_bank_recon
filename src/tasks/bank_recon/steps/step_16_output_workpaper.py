@@ -332,7 +332,18 @@ class OutputWorkpaperStep(PipelineStep):
 
 
 class ExcelFormatter:
-    """Excel格式設定管理類"""
+    """Excel格式設定管理類
+    
+    如果需要新增格式，需在 SHEET_FORMATS 中新增配置
+    '新工作表': {
+        'freeze_panes': 'B2',
+        'formats': [
+            {'columns': ['A'], 'format': ExcelFormatter.DATE_FORMAT},
+            {'range': 'B2:F100', 'format': ExcelFormatter.NUMBER_FORMAT_CUSTOM}
+        ]
+    }
+    
+    """
     
     # 自定義數字格式
     NUMBER_FORMAT_CUSTOM = '#,##0_);[Red](#,##0)'

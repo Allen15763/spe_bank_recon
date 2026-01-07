@@ -18,10 +18,15 @@ version = "2.0.0"
 # last_period_start = "2025-09-01"
 # last_period_end = "2025-09-30"
 
-current_period_start = "2025-11-01"
-current_period_end = "2025-11-30"
-last_period_start = "2025-10-01"
-last_period_end = "2025-10-31"
+#current_period_start = "2025-11-01"
+#current_period_end = "2025-11-30"
+#last_period_start = "2025-10-01"
+#last_period_end = "2025-10-31"
+
+current_period_start = "2025-12-01"
+current_period_end = "2025-12-31"
+last_period_start = "2025-11-01"
+last_period_end = "2025-11-30"
 
 # 日期格式
 date_format = "%Y-%m-%d"
@@ -573,17 +578,18 @@ transaction_type = "other_利息"
 ops_taishi_adj_amt = 0
 ops_cub_adj_amt = 0
 ops_ctbc_adj_amt = 0
+ops_nccc_adj_amt = 0
 
 # COD 匯費
-cod_remittance_fee = 9910  # 9740  
-ach_exps = 9480145  # 9163359  # 中信 ACH eACH EDI
+cod_remittance_fee = 10840  # 9740  
+ach_exps = 10869321  # 9163359  # 中信 ACH eACH EDI
 
 # 手續費尾差調整 (調成跟發票一致)
-taishi_service_fee_rounding = 0
-ctbc_service_fee_rounding = 0
+taishi_service_fee_rounding = 4
+ctbc_service_fee_rounding = 1
 
 # 中信回饋金（若當月無則設為 0）
-ctbc_rebate_amt = 524583  # 0
+ctbc_rebate_amt = 0  # 0
 
 # 特殊日期交易配置 (如 received_ctbc_spt)
 # e.g. 1127-Received CTBC-SPT，by Email confirmed to topup
@@ -592,6 +598,7 @@ ctbc_rebate_amt = 524583  # 0
 # 例如: 
 "2025-10-29" = 181432345
 "2025-11-27" =  175204850
+"2025-12-29" =  198032678
 
 # ============================================================
 # Google Sheets 配置
@@ -650,19 +657,26 @@ filename = "TW_SPE_entries_{period}.xlsx"
 
 # Entry Excel 輸出的 Sheet 清單
 sheets = [
-    "DFR驗證",
-    "分類驗證",
     "大entry",
-    "summary_01",
+    "104171 vs DFR",
+    "分類驗證",
+    "Entry Source Validation",
     "entry_temp",
     "entry_long_temp",
     "dfr",
+    "dfr_detail",
     "dfr_wp",
-    "frr_handling_fee",
-    "frr_remittance_fee",
+    "summary_01",
     "APCC手續費",
-    "APCC手續費_validate_frr",
+    "apcc_validate_frr",
+    "Trust account fee回補手續費",
+    "trust_account_fee",
+    "validate_frr_summary",
     "validate_frr_handling_fee",
     "validate_frr_net_billing",
-    "extracted_from_frr"
+    "frr_handling_fee",
+    "frr_remittance_fee",
+    "extracted_from_frr",
+    "acquiring_charge_history",
+    "APCC手續費_history"
 ]
