@@ -144,9 +144,6 @@ class OutputWorkpaperStep(PipelineStep):
                 entry_sheets
             )
             
-            output_files.append(str(entry_path))
-            self.logger.info("Entry Excel 輸出完成")
-            
             # =================================================================
             # 摘要
             # =================================================================

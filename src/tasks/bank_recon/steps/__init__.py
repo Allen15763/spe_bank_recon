@@ -19,8 +19,7 @@ from .step_12_process_dfr import ProcessDFRStep
 from .step_13_calculate_apcc import CalculateAPCCStep
 from .step_14_validate_daily_check import ValidateDailyCheckStep
 from .step_15_prepare_entries import PrepareEntriesStep
-from .step_16_generate_big_entry import GenerateBigEntryStep
-from .step_17_output_workpaper import OutputWorkpaperStep
+from .step_16_output_workpaper import OutputWorkpaperStep
 
 __all__ = [
     # Bank Statement vs Invoice Steps (1-9)
@@ -41,6 +40,5 @@ __all__ = [
     'CalculateAPCCStep',
     'ValidateDailyCheckStep',
     'PrepareEntriesStep',
-    'GenerateBigEntryStep',
     'OutputWorkpaperStep',
 ]
