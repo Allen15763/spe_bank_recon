@@ -70,6 +70,8 @@ def get_apcc_service_fee_charged(df: pd.DataFrame,
     # 計算手續費
     df_copy['commission_fee'] = df_copy['subtotal'] * df_copy['charge_rate']
     df_copy['commission_fee'] = df_copy['commission_fee'].round(0)
+    # Subtotal
+    df_copy.iloc[-1, df_copy.columns.get_loc('commission_fee')] = df_copy['commission_fee'].sum()
     
     logger.info("APCC 手續費計算完成")
     return df_copy
@@ -104,20 +106,28 @@ def apply_ops_adjustment(df: pd.DataFrame,
     
     if claimed_cols:
         first_claimed_col = claimed_cols[adj_idx]
+        bank = df_copy.iloc[:, df_copy.columns.get_loc(first_claimed_col)].name.split('_')[0]
 
         logger.info(f"""
-            \t\t\t調整調扣銀行: {df_copy.iloc[:, df_copy.columns.get_loc(first_claimed_col)].name.split('_')[0]}
+            \t\t\t調整調扣銀行: {bank}
             \t\t\t調整調扣前Normal: {df_copy.iloc[normal_row_index, df_copy.columns.get_loc(first_claimed_col)]:,.2f}
+            \t\t\t調整調扣前3期: {df_copy.iloc[normal_row_index + 1, df_copy.columns.get_loc(first_claimed_col)]:,.2f}
             \t\t\t調整調扣前SubTotal: {df_copy.iloc[subtotal_row_index, df_copy.columns.get_loc(first_claimed_col)]:,.2f}
         """)
-
-        # 調整 normal 行
-        df_copy.iloc[normal_row_index, df_copy.columns.get_loc(first_claimed_col)] += ops_adj_amt
+        
+        if bank != 'NCCC':
+            # 調整 normal 行
+            df_copy.iloc[normal_row_index, df_copy.columns.get_loc(first_claimed_col)] += ops_adj_amt
+        else:
+            # 調整 3期 行
+            df_copy.iloc[normal_row_index + 1, df_copy.columns.get_loc(first_claimed_col)] += ops_adj_amt
+            
         # 調整小計行
         df_copy.iloc[subtotal_row_index, df_copy.columns.get_loc(first_claimed_col)] += ops_adj_amt
 
         logger.info(f"""
             \t\t\t調整調扣後Normal: {df_copy.iloc[normal_row_index, df_copy.columns.get_loc(first_claimed_col)]:,.2f}
+            \t\t\t調整調扣前3期: {df_copy.iloc[normal_row_index + 1, df_copy.columns.get_loc(first_claimed_col)]:,.2f}
             \t\t\t調整調扣後SubTotal: {df_copy.iloc[subtotal_row_index, df_copy.columns.get_loc(first_claimed_col)]:,.2f}
         """)
     

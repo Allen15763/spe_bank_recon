@@ -43,6 +43,8 @@ class GenerateTrustAccountStep(PipelineStep):
             for df, bank in bank_data:
                 df = df[['transaction_type', 'total_claimed', 'total_service_fee']].copy()
                 df['bank'] = bank
+                # CTBC有多放adj的原始資料提示資訊，避免重複計算這邊先移除
+                df = df.query("transaction_type!='adj'")
                 dfs.append(df)
             
             df_all = pd.concat(dfs, ignore_index=True)

@@ -173,6 +173,7 @@ class LoadDailyCheckParamsStep(PipelineStep):
             ops_taishi_adj_amt = business_rules.get('ops_taishi_adj_amt', 0)
             ops_cub_adj_amt = business_rules.get('ops_cub_adj_amt', 0)
             ops_ctbc_adj_amt = business_rules.get('ops_ctbc_adj_amt', 0)
+            ops_nccc_adj_amt = business_rules.get('ops_nccc_adj_amt', 0)
             cod_remittance_fee = business_rules.get('cod_remittance_fee', 0)
             ach_exps = business_rules.get('ach_exps', 0)
             taishi_rounding = business_rules.get('taishi_service_fee_rounding', 0)
@@ -181,6 +182,7 @@ class LoadDailyCheckParamsStep(PipelineStep):
             context.set_variable('ops_taishi_adj_amt', ops_taishi_adj_amt)
             context.set_variable('ops_cub_adj_amt', ops_cub_adj_amt)
             context.set_variable('ops_ctbc_adj_amt', ops_ctbc_adj_amt)
+            context.set_variable('ops_nccc_adj_amt', ops_nccc_adj_amt)
             context.set_variable('cod_remittance_fee', cod_remittance_fee)
             context.set_variable('ach_exps', ach_exps)
             context.set_variable('taishi_service_fee_rounding', taishi_rounding)
@@ -231,9 +233,11 @@ class LoadDailyCheckParamsStep(PipelineStep):
             entry_output = output_config.get('entry', {})
             entry_filename = entry_output.get('filename', 'TW_SPE_entries_{period}.xlsx')
             entry_filename = entry_filename.replace('{period}', current_month)
+            entry_sheets = entry_output.get('sheets')
             
             context.set_variable('daily_check_filename', daily_check_filename)
             context.set_variable('entry_filename', entry_filename)
+            context.set_variable('entry_sheets', entry_sheets)
             
             self.logger.info(f"Daily Check 檔名: {daily_check_filename}")
             self.logger.info(f"Entry 檔名: {entry_filename}")

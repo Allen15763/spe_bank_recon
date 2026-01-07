@@ -429,7 +429,7 @@ def get_directory_size(directory: str) -> Tuple[int, int]:
 
 def load_toml(url: str, logger: Optional[logging.Logger] = None) -> Dict[str, Any]:
     """載入配置文件"""
-    if not url.exists():
+    if not Path(url).exists():
         raise FileNotFoundError(f"配置文件不存在: {url}")
     
     with open(url, 'rb') as f:

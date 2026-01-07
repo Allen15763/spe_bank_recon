@@ -61,7 +61,10 @@ from .entry_transformer import (
     process_accounting_entries,
     validate_accounting_balance,
     AccountingEntryTransformer,
-    MonthlyConfig,
+    ConfigurableEntryConfig,
+    MonthlyConfig,  # 別名，向後相容
+    get_easyfund_adj_service_fee_for_SPT,
+    get_easyfund_service_fee_for_999995,
 )
 
 from .entry_processor import (
@@ -125,7 +128,10 @@ __all__ = [
     'process_accounting_entries',
     'validate_accounting_balance',
     'AccountingEntryTransformer',
+    'ConfigurableEntryConfig',
     'MonthlyConfig',
+    'get_easyfund_adj_service_fee_for_SPT',
+    'get_easyfund_service_fee_for_999995',
     
     # Entry Processor
     'AccountingEntryProcessor',

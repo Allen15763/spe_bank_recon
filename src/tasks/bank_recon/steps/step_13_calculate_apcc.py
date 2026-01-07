@@ -69,6 +69,7 @@ class CalculateAPCCStep(PipelineStep):
             ops_taishi_adj_amt = context.get_variable('ops_taishi_adj_amt', 0)
             ops_cub_adj_amt = context.get_variable('ops_cub_adj_amt', 0)
             ops_ctbc_adj_amt = context.get_variable('ops_ctbc_adj_amt', 0)
+            ops_nccc_adj_amt = context.get_variable('ops_nccc_adj_amt', 0)
             taishi_rounding = context.get_variable('taishi_service_fee_rounding', 0)
             ctbc_rounding = context.get_variable('ctbc_service_fee_rounding', 0)
             end_date = context.get_variable('end_date')
@@ -98,7 +99,8 @@ class CalculateAPCCStep(PipelineStep):
             self.logger.info(f"工作底稿格式化完成: {len(df_wp)} 行")
             
             # =================================================================
-            # 3. 套用調扣調整
+            # 3. 套用調扣調整；~~只有NCCC調在3期，其他調在Normal~~ 
+            # NCCC是不調的 Ref 202408-APCC 手續費 、CTBC應該也是
             # =================================================================
             if ops_taishi_adj_amt != 0:
                 df_wp = apply_ops_adjustment(df_wp, ops_taishi_adj_amt)
@@ -114,6 +116,11 @@ class CalculateAPCCStep(PipelineStep):
                 df_wp = apply_ops_adjustment(df_wp, ops_ctbc_adj_amt, adj_idx=3)
                 df_wp_with_service_fee = apply_ops_adjustment(df_wp_with_service_fee, ops_ctbc_adj_amt, adj_idx=3)
                 self.logger.info(f"CTBC已套用調扣調整: {ops_ctbc_adj_amt:,.0f}")
+
+            if ops_nccc_adj_amt != 0:
+                df_wp = apply_ops_adjustment(df_wp, ops_nccc_adj_amt, adj_idx=1)
+                df_wp_with_service_fee = apply_ops_adjustment(df_wp_with_service_fee, ops_nccc_adj_amt, adj_idx=1)
+                self.logger.info(f"NCCC已套用調扣調整: {ops_nccc_adj_amt:,.0f}")
             
             # =================================================================
             # 4. 計算 APCC 手續費

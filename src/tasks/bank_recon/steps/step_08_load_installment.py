@@ -331,7 +331,8 @@ class LoadInstallmentStep(PipelineStep):
                 df_noninstall['source'].isin(noninstall_dates) &  # 日期過濾
                 (
                     df_noninstall['卡別'].isna() |  # 本行卡（ON-US 的數據行，卡別為 NaN）
-                    (df_noninstall['卡別'] == '非本行國內')  # 他行卡
+                    (df_noninstall['卡別'] == '非本行國內') |  # 他行卡
+                    (df_noninstall['卡別'] == '帳務調整')  # 帳務調整；對帳單上的調整體現
                 )
             )
             
@@ -342,14 +343,18 @@ class LoadInstallmentStep(PipelineStep):
             if self.logger.level <= 20:  # INFO level
                 onus_mask = df_noninstall['source'].isin(noninstall_dates) & df_noninstall['卡別'].isna()
                 notus_mask = df_noninstall['source'].isin(noninstall_dates) & (df_noninstall['卡別'] == '非本行國內')
+                adj_mask = df_noninstall['source'].isin(noninstall_dates) & (df_noninstall['卡別'] == '帳務調整')
                 onus_claimed = df_noninstall.loc[onus_mask, '請款金額'].sum()
                 onus_fee = df_noninstall.loc[onus_mask, '手續費'].sum()
                 notus_claimed = df_noninstall.loc[notus_mask, '請款金額'].sum()
                 notus_fee = df_noninstall.loc[notus_mask, '手續費'].sum()
+                adj_claimed = df_noninstall.loc[adj_mask, '請款金額'].sum()
+                adj_fee = df_noninstall.loc[adj_mask, '手續費'].sum()
                 
                 self.logger.info("  非分期數據明細:")
                 self.logger.info(f"    本行卡: 手續費 {onus_fee:,.0f} / 請款 {onus_claimed:,.0f}")
                 self.logger.info(f"    他行卡: 手續費 {notus_fee:,.0f} / 請款 {notus_claimed:,.0f}")
+                self.logger.info(f"    帳務調整: 手續費 {adj_fee:,.0f} / 請款 {adj_claimed:,.0f}")
                 self.logger.info(f"    合計:   手續費 {normal_fee:,.0f} / 請款 {normal_claimed:,.0f}")
         else:
             normal_claimed = 0
@@ -359,6 +364,11 @@ class LoadInstallmentStep(PipelineStep):
         results['normal'] = {
             'total_claimed': normal_claimed,
             'total_service_fee': normal_fee
+        }
+        # 調整數已經納入normal，此資訊僅供參考
+        results['adj'] = {
+            'total_claimed': adj_claimed,
+            'total_service_fee': adj_fee
         }
         
         # ========================================================================

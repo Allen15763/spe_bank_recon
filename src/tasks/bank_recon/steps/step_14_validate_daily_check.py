@@ -44,9 +44,10 @@ class ValidateDailyCheckStep(PipelineStep):
             # 取得資料
             df_frr_handling_fee = context.get_auxiliary_data('frr_handling_fee')
             df_frr_net_billing = context.get_auxiliary_data('frr_net_billing')
-            df_escrow_summary = context.get_auxiliary_data('apcc_summary')
+            # 未含OPS調扣數
+            df_escrow_summary = context.get_auxiliary_data('trust_account_fee')
             # 轉換成MutiIndex
-            df_escrow_summary = convert_flatIndex_to_multiIndex(df_escrow_summary)
+            # df_escrow_summary = convert_flatIndex_to_multiIndex(df_escrow_summary)
             
             validation_results = {
                 'handling_fee_valid': True,

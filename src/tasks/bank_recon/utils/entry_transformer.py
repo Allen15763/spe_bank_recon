@@ -1,13 +1,19 @@
 """
 會計分錄轉換器
 將每日匯總的寬格式資料轉換為標準的長格式會計分錄
+
+重構說明:
+- 配置驅動：會計科目映射、分錄映射規則從 TOML 配置讀取
+- 新增 ConfigurableEntryConfig 類取代硬編碼的 MonthlyConfig
+- 支援月度配置檔案獨立管理
 """
 
 from typing import Dict, List, Optional, Any, Tuple
+from pathlib import Path
 import pandas as pd
 import numpy as np
 
-from src.utils import get_logger
+from src.utils import get_logger, load_toml
 
 logger = get_logger("entry_transformer")
 
@@ -169,6 +175,7 @@ def validate_accounting_balance(df_entry_temp: pd.DataFrame) -> Dict[str, Any]:
 
 
 def get_easyfund_adj_service_fee_for_SPT(df, beg_date: str) -> tuple:
+    """從仲信手續費檔案取得折讓金額"""
     idx_discount = df.loc[df.號碼.str.contains(f"/{beg_date[5:7]}.*折讓總計", na=False, regex=True)].index[-1]
 
     acc_111301 = df.iloc[idx_discount, df.columns.get_loc('VAT')]
@@ -178,8 +185,9 @@ def get_easyfund_adj_service_fee_for_SPT(df, beg_date: str) -> tuple:
 
 
 def get_easyfund_service_fee_for_999995(df, beg_date: str) -> float:
+    """從仲信手續費檔案取得服務費金額"""
     mask1 = df.開立日期.astype('string').str.contains(f"{beg_date[5:7]}", na=False, regex=True)
-    mask2 = df.號碼.str.contains("[A-Z][A-Z]\d{8}", na=False, regex=True)
+    mask2 = df.號碼.str.contains("[A-Z][A-Z]\\d{8}", na=False, regex=True)
     mask3 = df.開立日期.astype('string').str.contains(f"{beg_date[:4]}", na=False, regex=True)
     idx_service_fee = df.loc[mask1 & mask2 & mask3, :].index[-1]
     return df.iloc[idx_service_fee, df.columns.get_loc('含稅')]
@@ -187,75 +195,108 @@ def get_easyfund_service_fee_for_999995(df, beg_date: str) -> float:
 
 class AccountingEntryTransformer:
     """
-    會計分錄轉換器
+    會計分錄轉換器 (配置驅動版本)
 
     將每日匯總的寬格式資料轉換為標準的長格式會計分錄
     """
 
-    def __init__(self):
-        """初始化轉換器，設定會計科目與交易類型的映射關係"""
+    def __init__(self, config: Dict[str, Any] = None):
+        """
+        初始化轉換器
+        
+        Args:
+            config: 從 TOML 讀取的配置，包含 accounts、accounts_detail、entry_mapping
+        """
+        self.config = config or {}
+        self.logger = get_logger("AccountingEntryTransformer")
+        
+        # 從配置讀取會計科目描述
+        self.account_descriptions = self._build_account_descriptions()
+        
+        # 從配置讀取分錄映射規則
+        self.entry_mapping = self._build_entry_mapping()
+        
+        self.logger.debug(f"初始化完成: {len(self.account_descriptions)} 個科目, {len(self.entry_mapping)} 個映射規則")
 
-        # 會計科目名稱映射
-        self.account_descriptions = {
-            # 可根據實際需求修改
-            '200208': 'Receive on behalf of Shopee',
-            '200701': 'Amount due to SPTTW-Escrow',
-            '530006': {
-                '收單_SPE': 'Bank transaction fee(Remittance fee)-收單-SPE',
-                '回饋金': 'Bank transaction fee(Remittance fee)-CTBC收單手續費回饋金',
-                '內扣CTBCCC匯費': 'Bank transaction fee(Remittance fee)-收單轉帳匯費',
-                'COD匯費': 'Bank transaction fee(Remittance fee)-COD匯費',
-            },
-            '101150': 'Cash in Bank - Fubon TWD 2087',
-            '104171': 'Escrow Bank - CTBC TWD 4935',
-            '999995': 'Cash Clearing',
-            '111301': 'Tax Receivable - GST/VAT',
-            '111302': 'Tax Receivable - WHT',
-            '112001': 'Amount due from IC-APYTW',
-            '112002': 'Unbilled Receivables-RC-SPTTW',
-            '113101': 'Receivables from payment gateway',
-            '200601': 'Tax Payables - GST/VAT/WHT',
-            '440001': 'Interest Income',
-            '460103': {
-                'APCC_ACH': 'Commission charge-RC-SPTTW-ACH/eACH/EDI',
-                'APCC_手續費': 'Commission charge-RC-SPTTW-APCC手續費',
+    def _build_account_descriptions(self) -> Dict[str, Any]:
+        """從配置建立會計科目描述映射"""
+        accounts = self.config.get('accounts', {})
+        accounts_detail = self.config.get('accounts_detail', {})
+        
+        # 合併基本科目和有子分類的科目
+        result = dict(accounts)
+        
+        for account_no, details in accounts_detail.items():
+            result[account_no] = details
+        
+        # 如果配置為空，使用預設值
+        if not result:
+            self.logger.warning("未找到配置，使用預設會計科目映射")
+            result = {
+                '200208': 'Receive on behalf of Shopee',
+                '200701': 'Amount due to SPTTW-Escrow',
+                '530006': {
+                    '收單_SPE': 'Bank transaction fee(Remittance fee)-收單-SPE',
+                    '回饋金': 'Bank transaction fee(Remittance fee)-CTBC收單手續費回饋金',
+                    '內扣CTBCCC匯費': 'Bank transaction fee(Remittance fee)-收單轉帳匯費',
+                    'COD匯費': 'Bank transaction fee(Remittance fee)-COD匯費',
+                },
+                '101150': 'Cash in Bank - Fubon TWD 2087',
+                '104171': 'Escrow Bank - CTBC TWD 4935',
+                '999995': 'Cash Clearing',
+                '111301': 'Tax Receivable - GST/VAT',
+                '111302': 'Tax Receivable - WHT',
+                '112001': 'Amount due from IC-APYTW',
+                '112002': 'Unbilled Receivables-RC-SPTTW',
+                '113101': 'Receivables from payment gateway',
+                '200601': 'Tax Payables - GST/VAT/WHT',
+                '440001': 'Interest Income',
+                '460103': {
+                    'APCC_ACH': 'Commission charge-RC-SPTTW-ACH/eACH/EDI',
+                    'APCC_手續費': 'Commission charge-RC-SPTTW-APCC手續費',
+                }
             }
-        }
+        
+        return result
 
-        # 定義會計分錄的轉換規則
-        # 格式: (原始欄位名稱, 會計科目, 交易類型, 科目描述key)
-        self.entry_mapping = [
-            # 200208科目 - 兩筆received_ctbc_spt (negative和positive)
-            ('acc_200208_ReceivedCTBCSPT_negative', '200208', 'received_ctbc_spt', None),
-            ('acc_200208_ReceivedCTBCSPT_positive', '200208', 'received_ctbc_spt', None),
-
-            # 200701科目 - out, received, 退匯
-            ('acc_200701_OutCTBCSPT', '200701', 'out_ctbc_spt', None),
-            ('acc_200701_ReceivedCTBCSPT_negative', '200701', 'received_ctbc_spt', None),
-            ('acc_200701_ReceivedCTBCSPT退匯', '200701', 'received_ctbc_spt_退匯', None),
-
-            # 530006科目 - 收單SPE和內扣匯費
-            ('acc_530006_收單_SPE', '530006', 'received_ctbc_spt', '收單_SPE'),
-            ('acc_530006_內扣CTBCCC匯費', '530006', '內扣_ctbc_cc_匯費', '內扣CTBCCC匯費'),
-
-            # 101150科目 - received
-            ('acc_101150_Received_CTBC_SPT', '101150', 'received_ctbc_spt', None),
-
-            # 104171科目 - out, received, 退匯, 內扣匯費
-            ('acc_104171_OutCTBCSPT', '104171', 'out_ctbc_spt', None),
-            ('acc_104171_ReceivedCTBCSPT', '104171', 'received_ctbc_spt', None),
-            ('acc_104171_ReceivedCTBCSPT退匯', '104171', 'received_ctbc_spt_退匯', None),
-            ('acc_104171_內扣CTBCCC匯費', '104171', '內扣_ctbc_cc_匯費', None),
-            ('acc_104171_others', '104171', 'other', None),
-            ('acc_104171_others_利息', '104171', 'other_利息', None),
-
-            # 999995科目 - others
-            ('acc_999995_others', '999995', 'other', None),
-
-            # 440001 - interest
-            ('acc_440001_interest', '440001', 'other_利息', None),
-            ('acc_111302_interest', '111302', 'other_利息', None),
-        ]
+    def _build_entry_mapping(self) -> List[Tuple]:
+        """從配置建立分錄映射規則"""
+        mapping_config = self.config.get('entry_mapping', [])
+        
+        result = []
+        for item in mapping_config:
+            column = item.get('column')
+            account_no = item.get('account_no')
+            transaction_type = item.get('transaction_type')
+            desc_key = item.get('desc_key')
+            
+            if column and account_no and transaction_type:
+                result.append((column, account_no, transaction_type, desc_key))
+        
+        # 如果配置為空，使用預設值
+        if not result:
+            self.logger.warning("未找到配置，使用預設分錄映射規則")
+            result = [
+                ('acc_200208_ReceivedCTBCSPT_negative', '200208', 'received_ctbc_spt', None),
+                ('acc_200208_ReceivedCTBCSPT_positive', '200208', 'received_ctbc_spt', None),
+                ('acc_200701_OutCTBCSPT', '200701', 'out_ctbc_spt', None),
+                ('acc_200701_ReceivedCTBCSPT_negative', '200701', 'received_ctbc_spt', None),
+                ('acc_200701_ReceivedCTBCSPT退匯', '200701', 'received_ctbc_spt_退匯', None),
+                ('acc_530006_收單_SPE', '530006', 'received_ctbc_spt', '收單_SPE'),
+                ('acc_530006_內扣CTBCCC匯費', '530006', '內扣_ctbc_cc_匯費', '內扣CTBCCC匯費'),
+                ('acc_101150_Received_CTBC_SPT', '101150', 'received_ctbc_spt', None),
+                ('acc_104171_OutCTBCSPT', '104171', 'out_ctbc_spt', None),
+                ('acc_104171_ReceivedCTBCSPT', '104171', 'received_ctbc_spt', None),
+                ('acc_104171_ReceivedCTBCSPT退匯', '104171', 'received_ctbc_spt_退匯', None),
+                ('acc_104171_內扣CTBCCC匯費', '104171', '內扣_ctbc_cc_匯費', None),
+                ('acc_104171_others', '104171', 'other', None),
+                ('acc_104171_others_利息', '104171', 'other_利息', None),
+                ('acc_999995_others', '999995', 'other', None),
+                ('acc_440001_interest', '440001', 'other_利息', None),
+                ('acc_111302_interest', '111302', 'other_利息', None),
+            ]
+        
+        return result
 
     def get_account_description(self, account_no: str, desc_key: str = None) -> str:
         """
@@ -290,6 +331,7 @@ class AccountingEntryTransformer:
 
         # 確保Date欄位是日期格式
         if df_entry_temp['Date'].dtype != 'datetime64[ns]':
+            df_entry_temp = df_entry_temp.copy()
             df_entry_temp['Date'] = pd.to_datetime(df_entry_temp['Date'])
 
         # 遍歷每一天的資料
@@ -345,18 +387,6 @@ class AccountingEntryTransformer:
 
         Returns:
             包含特殊分錄的完整資料
-
-        Example:
-            special_entries = [
-                {
-                    'accounting_date': '2025/11/21',
-                    'transaction_type': 'other_利息',
-                    'account_no': '104171',
-                    'account_desc': 'Escrow Bank - CTBC TWD 4935',
-                    'amount': 0.0,
-                    'period': '2025-11'
-                }
-            ]
         """
         df_special = pd.DataFrame(special_entries)
         df_combined = pd.concat([df_result, df_special], ignore_index=True)
@@ -374,30 +404,12 @@ class AccountingEntryTransformer:
 
         Returns:
             匯總分錄的DataFrame
-
-        說明:
-            每個 entry_dict 可以包含以下欄位:
-            - transaction_type: 交易類型 (必填)
-            - amount: 金額 (必填)
-            - account_desc: 科目描述 (選填，不填則使用預設)
-            - desc_key: 描述key (選填，適用於有多個子描述的科目)
-
-        Example:
-            summary_data = {
-                '111301': [
-                    {'transaction_type': 'spe_withdrawal', 'amount': 0.0},
-                    {'transaction_type': '期初數', 'amount': -12315.0, 'account_desc': '自訂描述'}
-                ],
-                '530006': [
-                    {'transaction_type': 'spt', 'amount': 5000.0, 'desc_key': '收單_SPE'}
-                ]
-            }
         """
         summary_list = []
 
         for account_no, entries in summary_data.items():
             for entry in entries:
-                # 取得科目描述 - 支援三種方式
+                # 取得科目描述
                 # 優先順序: 1. 配置中的account_desc  2. 配置中的desc_key  3. 預設
                 if 'account_desc' in entry:
                     # 方式1: 配置中明確指定 account_desc
@@ -422,273 +434,164 @@ class AccountingEntryTransformer:
         return pd.DataFrame(summary_list)
 
 
-class MonthlyConfig:
+class ConfigurableEntryConfig:
     """
-    月度配置類別
-    集中管理每月可能變動的參數
-    """
-
-    """
-    月度會計分錄配置檔
-    管理每月可能變動的業務規則和參數
-
-    使用方式:
-    1. 每月檢查完配置檔案，再來改這邊需要新增的分錄 e.g.利息
-    2. 根據當月實際情況調整參數
-    3. 在主程式中匯入對應月份的配置
+    配置驅動的 Entry 配置類
+    
+    從 TOML 配置檔讀取期初數、特殊分錄等月度調整參數，
+    取代原本硬編碼的 MonthlyConfig
     """
 
-    def __init__(self, year: int, month: int, 
-                 df_easyfund,
-                 apcc_acquiring_charge,
-                 ach_exps,
-                 cod_remittance_fee,
-                 df_ctbc_rebate_amt,
-                 beg_date,
-                 ):
+    def __init__(self, 
+                 year: int, 
+                 month: int,
+                 entry_config: Dict[str, Any],
+                 monthly_config: Dict[str, Any],
+                 runtime_params: Dict[str, Any]):
         """
-        初始化月度配置
-
+        初始化配置驅動的 Entry 配置
+        
         Args:
-            year: 年份 (例如: 2025)
-            month: 月份 (1-12)
+            year: 年份
+            month: 月份
+            entry_config: 從主配置檔讀取的 [entry] 區段
+            monthly_config: 從月度配置檔讀取的配置
+            runtime_params: 運行時參數 (從 context 取得的動態計算結果)
         """
         self.year = year
         self.month = month
         self.period = f"{year}-{month:02d}"
-        self.args = {
-            'easyfund': df_easyfund,
-            'apcc_acquiring': apcc_acquiring_charge,
-            'ach_exps': ach_exps,
-            'cod_remittance_fee': cod_remittance_fee,
-            'ctbc_rebate_amt': df_ctbc_rebate_amt,
-            'beg_date': beg_date,
-        }
+        self.entry_config = entry_config
+        self.monthly_config = monthly_config
+        self.runtime_params = runtime_params
+        self.logger = get_logger("ConfigurableEntryConfig")
+        
+        self.logger.info(f"初始化配置: {self.period}")
 
     def get_special_dates_config(self) -> Dict[str, List[Dict]]:
         """
         取得特殊日期的分錄配置
-
+        
         Returns:
             字典，key為日期 (YYYY-MM-DD格式)，value為該日期的特殊分錄列表
-
-        說明:
-        - 某些日期可能有特殊的交易類型 (如利息、調整等)
-        - 每月根據實際發生情況調整
-
-        Note:
-        - Key是日期，可以一天內含多筆紀錄
         """
-        special_dates = {
-            # 範例: 06/21有利息收入
-            # '2025-10-21': [
-            #     {
-            #         'transaction_type': 'other_利息',
-            #         'account_no': '104171',
-            #         'amount': interest_income * .9  # 根據銀行對帳單的90%
-            #     },
-            #     {
-            #         'transaction_type': 'other_利息',
-            #         'account_no': '111302',
-            #         'amount': interest_income * .1  # 根據銀行對帳單的10%
-            #     },
-            #     {
-            #         'transaction_type': 'other_利息',
-            #         'account_no': '440001',
-            #         'amount': interest_income * -1  # 根據銀行對帳單填入
-            #     }
-            # ],
-
-            # # 範例: 某些日期有other類型調整
-            # '2025-11-06': [
-            #     {
-            #         'transaction_type': 'other',
-            #         'account_no': '200701',
-            #         'amount': 0.0
-            #     }
-            # ],
-            # '2025-11-19': [
-            #     {
-            #         'transaction_type': 'other',
-            #         'account_no': '200701',
-            #         'amount': 0.0
-            #     }
-            # ],
-            # '2025-11-20': [
-            #     {
-            #         'transaction_type': 'other',
-            #         'account_no': '104171',
-            #         'amount': 0.0
-            #     }
-            # ],
-
-            # # 範例: 11/23開始有999995的清算分錄
-            # '2025-11-23': [
-            #     {
-            #         'transaction_type': 'other',
-            #         'account_no': '999995',
-            #         'amount': 0.0
-            #     }
-            # ],
-            # '2025-11-24': [
-            #     {
-            #         'transaction_type': 'other',
-            #         'account_no': '999995',
-            #         'amount': 0.0
-            #     }
-            # ],
-
-            # 範例: 11/25有104171的other類型和999995的清算
-            # '2025-11-25': [
-            #     {
-            #         'transaction_type': 'other',
-            #         'account_no': '104171',
-            #         'amount': 13951257.0
-            #     },
-            #     {
-            #         'transaction_type': 'other',
-            #         'account_no': '999995',
-            #         'amount': -13951257.0
-            #     }
-            # ]
-        }
-
-        # # 自動為11/23之後的每一天添加999995的清算分錄
-        # # (如果該日期尚未在special_dates中定義)
-        # for day in range(26, 31):
-        #     date_str = f'2025-11-{day:02d}'
-        #     if date_str not in special_dates:
-        #         special_dates[date_str] = []
-
-        #     # 檢查是否已有999995的分錄
-        #     has_999995 = any(
-        #         entry['account_no'] == '999995'
-        #         for entry in special_dates[date_str]
-        #     )
-
-        #     if not has_999995:
-        #         special_dates[date_str].append({
-        #             'transaction_type': 'other',
-        #             'account_no': '999995',
-        #             'amount': 0.0
-        #         })
-
-        return special_dates
+        special_dates = self.monthly_config.get('special_dates', {})
+        
+        # 將 TOML 格式轉換為內部格式
+        result = {}
+        for date_str, entries in special_dates.items():
+            if isinstance(entries, list):
+                result[date_str] = entries
+        
+        self.logger.debug(f"載入特殊日期配置: {len(result)} 個日期")
+        return result
 
     def get_summary_data(self) -> Dict[str, List[Dict]]:
         """
         取得月底匯總分錄資料
-
+        
+        從配置檔讀取期初數，結合運行時參數生成完整的匯總資料
+        
         Returns:
             字典，key為科目編號，value為該科目的匯總分錄列表
-
-        說明:
-        - 這些分錄通常包含期初數、期末餘額、各種調整項目
-        - 金額需要根據實際對帳結果填入
         """
+        opening_balances = self.monthly_config.get('opening_balances', {})
+        reversal_amounts = self.monthly_config.get('reversal_amounts', {})
+        
+        # 從運行時參數取得計算結果
+        df_easyfund = self.runtime_params.get('df_easyfund')
+        beg_date = self.runtime_params.get('beg_date')
+        apcc_acquiring = self.runtime_params.get('apcc_acquiring_charge', 0)
+        ach_exps = self.runtime_params.get('ach_exps', 0)
+        cod_remittance_fee = self.runtime_params.get('cod_remittance_fee', 0)
+        ctbc_rebate_amt = self.runtime_params.get('ctbc_rebate_amt', 0)
+        
+        # 計算仲信手續費相關金額
+        adj_service_fee = (0, 0)
+        service_fee_999995 = 0
+        
+        if df_easyfund is not None and beg_date:
+            try:
+                adj_service_fee = get_easyfund_adj_service_fee_for_SPT(df_easyfund, beg_date)
+                service_fee_999995 = get_easyfund_service_fee_for_999995(df_easyfund, beg_date)
+            except Exception as e:
+                self.logger.warning(f"計算仲信手續費金額失敗: {e}")
+        
         summary_data = {
             # ===== 資產類科目 =====
-
-            # 稅金應收款 - GST/VAT
             '111301': [
                 {'transaction_type': 'spe_withdrawal', 'amount': 0.0},
-                {'transaction_type': 'spl手續費調整', 'amount': get_easyfund_adj_service_fee_for_SPT(
-                    self.args['easyfund'], self.args['beg_date'])[0]},
-                {'transaction_type': '期初數', 'amount': -11_536.0},  # -12315.0
+                {'transaction_type': 'spl手續費調整', 'amount': adj_service_fee[0]},
+                {'transaction_type': '期初數', 'amount': opening_balances.get('111301', 0)},
             ],
 
-            # 稅金應收款 - WHT
             '111302': [
-                {'transaction_type': '期初數', 'amount': 2_174_601.0},
+                {'transaction_type': '期初數', 'amount': opening_balances.get('111302', 0)},
             ],
 
-            # 關係人往來 - APYTW
             '112001': [
-                {'transaction_type': '期初數', 'amount': 0.0},
+                {'transaction_type': '期初數', 'amount': opening_balances.get('112001', 0)},
             ],
 
-            # UB - RC-SPTTW
             '112002': [
-                {'transaction_type': 'spt', 'amount': self.args['apcc_acquiring'] + self.args['ach_exps']},
-                {'transaction_type': '期初數', 'amount': 181_118_860.0},  # 175819228.0
-                {'transaction_type': '發票已開立沖轉', 'amount': -181_118_860.0},
+                {'transaction_type': 'spt', 'amount': apcc_acquiring + ach_exps},
+                {'transaction_type': '期初數', 'amount': opening_balances.get('112002', 0)},
+                {'transaction_type': '發票已開立沖轉', 'amount': reversal_amounts.get(
+                    '112002_reversal', -opening_balances.get('112002', 0))},
             ],
 
-            # VAT
             '113101': [
-                {'transaction_type': '期初數', 'amount': 0.0},
+                {'transaction_type': '期初數', 'amount': opening_balances.get('113101', 0)},
             ],
 
-            # 銀行存款 - 富邦
             '101150': [
-                {'transaction_type': '期初數', 'amount': 0.0}
+                {'transaction_type': '期初數', 'amount': opening_balances.get('101150', 0)}
             ],
 
-            # 託管銀行 - 中信
             '104171': [
-                {'transaction_type': '期初數', 'amount': 1_394_478_080.0},  # 2739021556.0
+                {'transaction_type': '期初數', 'amount': opening_balances.get('104171', 0)},
             ],
 
             # ===== 負債類科目 =====
-
-            # 代收代付 - Shopee
             '200208': [
                 {'transaction_type': 'spt', 'amount': 0.0},
                 {'transaction_type': 'spt', 'amount': 0.0},
-                {'transaction_type': '期初數', 'amount': -990_741_706_660.0},  # -1014347397798.587
-                {'transaction_type': '期初數', 'amount': 990_741_706_660.0},
+                {'transaction_type': '期初數', 'amount': opening_balances.get('200208_credit', 0)},
+                {'transaction_type': '期初數', 'amount': opening_balances.get('200208_debit', 0)},
             ],
 
-            # 稅金應付款
             '200601': [
-                {'transaction_type': '期初數', 'amount': 0.0},
+                {'transaction_type': '期初數', 'amount': opening_balances.get('200601', 0)},
             ],
 
-            # 應付 - SPTTW託管
             '200701': [
                 {'transaction_type': 'spe_withdrawal', 'amount': 0.0},
-                {'transaction_type': 'spl手續費調整', 'amount': get_easyfund_adj_service_fee_for_SPT(
-                    self.args['easyfund'], self.args['beg_date'])[1]},
-                {'transaction_type': 'spt', 'amount': -get_easyfund_service_fee_for_999995(
-                    self.args['easyfund'], self.args['beg_date']
-                ) - self.args['cod_remittance_fee'] - self.args['ctbc_rebate_amt'] * -1},
-                {'transaction_type': '期初數', 'amount': -1_431_762_212.0},  # -2770078192.5866
+                {'transaction_type': 'spl手續費調整', 'amount': adj_service_fee[1]},
+                {'transaction_type': 'spt', 'amount': -service_fee_999995 - cod_remittance_fee - ctbc_rebate_amt * -1},
+                {'transaction_type': '期初數', 'amount': opening_balances.get('200701', 0)},
             ],
 
             # ===== 收入類科目 =====
-
-            # 利息收入
             '440001': [
-                {'transaction_type': '期初數', 'amount': 0},
+                {'transaction_type': '期初數', 'amount': opening_balances.get('440001', 0)},
             ],
 
-            # 佣金支出
             '460103': [
-                {'transaction_type': 'spt', 'amount': self.args['ach_exps'] * -1, 'desc_key': 'APCC_ACH', },
-                {'transaction_type': 'spt', 'amount': self.args['apcc_acquiring'] * -1, 'desc_key': 'APCC_手續費'},
+                {'transaction_type': 'spt', 'amount': ach_exps * -1, 'desc_key': 'APCC_ACH'},
+                {'transaction_type': 'spt', 'amount': apcc_acquiring * -1, 'desc_key': 'APCC_手續費'},
             ],
 
             # ===== 費用類科目 =====
-
-            # 銀行手續費
             '530006': [
-                # CTBC回饋金  df_ctbc_rebate['Actual received amount'].iloc[-1] * -1
-                {'transaction_type': 'spt', 'amount': self.args['ctbc_rebate_amt'] * -1, 'desc_key': '回饋金'},
-                # COD匯費
-                {'transaction_type': 'spt', 'amount': self.args['cod_remittance_fee'], 'desc_key': 'COD匯費'},
+                {'transaction_type': 'spt', 'amount': ctbc_rebate_amt * -1, 'desc_key': '回饋金'},
+                {'transaction_type': 'spt', 'amount': cod_remittance_fee, 'desc_key': 'COD匯費'},
             ],
 
             # ===== 清算科目 =====
-
-            # 現金清算
             '999995': [
                 {'transaction_type': 'spe_withdrawal', 'amount': 0.0},
-                {'transaction_type': 'spl手續費調整', 'amount': -get_easyfund_adj_service_fee_for_SPT(
-                    self.args['easyfund'], self.args['beg_date'])[0] - 
-                    get_easyfund_adj_service_fee_for_SPT(self.args['easyfund'], self.args['beg_date'])[1]
-                 },
-                {'transaction_type': 'spt', 'amount': get_easyfund_service_fee_for_999995(self.args['easyfund'], 
-                                                                                          self.args['beg_date'])},
+                {'transaction_type': 'spl手續費調整', 'amount': -adj_service_fee[0] - adj_service_fee[1]},
+                {'transaction_type': 'spt', 'amount': service_fee_999995},
             ]
         }
 
@@ -697,32 +600,15 @@ class MonthlyConfig:
     def get_business_rules(self) -> Dict:
         """
         取得業務規則配置
-
+        
         Returns:
             包含各種業務規則的字典
-
-        說明:
-        - 定義某些科目的特殊處理邏輯
-        - 金額計算的特殊規則
         """
+        validation_config = self.entry_config.get('validation', {})
+        
         rules = {
-            # 是否啟用999995清算分錄 (從某日期開始)
-            # 'enable_999995_from_date': '2025-11-23',
-
-            # 是否啟用104471科目 (others)
-            # 'enable_104471': False,
-
-            # 特殊調整項目
-            'adjustments': {
-                # 範例: 某個科目需要額外調整
-                # '104171': {'date': '2025-11-25', 'amount': 13951257.0}
-            },
-
-            # 跳過金額為0的分錄 (可選)
-            'skip_zero_amount': False,
-
-            # 金額小數位數
-            'amount_decimal_places': 2
+            'skip_zero_amount': validation_config.get('skip_zero_amount', False),
+            'amount_decimal_places': validation_config.get('amount_decimal_places', 2),
         }
 
         return rules
@@ -730,41 +616,36 @@ class MonthlyConfig:
     def validate_config(self) -> bool:
         """
         驗證配置的完整性和正確性
-
+        
         Returns:
             True if valid, False otherwise
         """
         try:
-            # 檢查特殊日期配置
+            # 檢查期初數配置
+            opening_balances = self.monthly_config.get('opening_balances', {})
+            if not opening_balances:
+                self.logger.warning("期初數配置為空")
+            
+            # 檢查特殊日期配置格式
             special_dates = self.get_special_dates_config()
             for date, entries in special_dates.items():
-                assert isinstance(entries, list), f"特殊日期 {date} 的分錄必須是列表"
+                if not isinstance(entries, list):
+                    raise ValueError(f"特殊日期 {date} 的分錄必須是列表")
                 for entry in entries:
-                    assert 'transaction_type' in entry, "分錄必須包含 transaction_type"
-                    assert 'account_no' in entry, "分錄必須包含 account_no"
-                    assert 'amount' in entry, "分錄必須包含 amount"
-
-                    # 驗證 account_desc 和 desc_key 不能同時存在
-                    if 'account_desc' in entry and 'desc_key' in entry:
-                        print(f"⚠️  警告: 日期 {date} 的分錄同時包含 account_desc 和 desc_key，將優先使用 account_desc")
-
-            # 檢查匯總資料配置
-            summary_data = self.get_summary_data()
-            for account_no, entries in summary_data.items():
-                assert isinstance(entries, list), f"科目 {account_no} 的匯總分錄必須是列表"
-                for entry in entries:
-                    assert 'transaction_type' in entry, "匯總分錄必須包含 transaction_type"
-                    assert 'amount' in entry, "匯總分錄必須包含 amount"
-
-                    # 驗證 account_desc 和 desc_key 不能同時存在
-                    if 'account_desc' in entry and 'desc_key' in entry:
-                        print(f"⚠️  警告: 科目 {account_no} 的匯總分錄同時包含 account_desc 和 desc_key，將優先使用 account_desc")
-
-            print(f"✓ {self.period} 配置驗證通過")
+                    if 'account_no' not in entry:
+                        raise ValueError(f"特殊日期 {date} 的分錄缺少 account_no")
+                    if 'transaction_type' not in entry:
+                        raise ValueError(f"特殊日期 {date} 的分錄缺少 transaction_type")
+                    if 'amount' not in entry:
+                        raise ValueError(f"特殊日期 {date} 的分錄缺少 amount")
+            
+            self.logger.info(f"✓ {self.period} 配置驗證通過")
             return True
 
-        except AssertionError as e:
-            print(f"✗ {self.period} 配置驗證失敗: {str(e)}")
+        except Exception as e:
+            self.logger.error(f"✗ {self.period} 配置驗證失敗: {str(e)}")
             return False
 
 
+# 保留 MonthlyConfig 作為 ConfigurableEntryConfig 的別名，確保向後相容
+MonthlyConfig = ConfigurableEntryConfig
