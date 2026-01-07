@@ -233,9 +233,11 @@ class LoadDailyCheckParamsStep(PipelineStep):
             entry_output = output_config.get('entry', {})
             entry_filename = entry_output.get('filename', 'TW_SPE_entries_{period}.xlsx')
             entry_filename = entry_filename.replace('{period}', current_month)
+            entry_sheets = entry_output.get('sheets')
             
             context.set_variable('daily_check_filename', daily_check_filename)
             context.set_variable('entry_filename', entry_filename)
+            context.set_variable('entry_sheets', entry_sheets)
             
             self.logger.info(f"Daily Check 檔名: {daily_check_filename}")
             self.logger.info(f"Entry 檔名: {entry_filename}")

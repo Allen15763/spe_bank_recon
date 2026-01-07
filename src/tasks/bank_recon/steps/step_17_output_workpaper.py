@@ -8,6 +8,8 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 from datetime import datetime
+from openpyxl.styles import numbers
+from openpyxl.utils import get_column_letter
 
 from src.core.pipeline import PipelineStep, StepResult, StepStatus
 from src.core.pipeline.context import ProcessingContext
@@ -41,6 +43,7 @@ class OutputWorkpaperStep(PipelineStep):
             output_path = self.config.get('output', {}).get('path', './output/')
             daily_check_filename = context.get_variable('daily_check_filename')
             entry_filename = context.get_variable('entry_filename')
+            entry_sheets = context.get_variable('entry_sheets')
             current_month = context.get_variable('current_month')
             
             # 確保輸出目錄存在
@@ -54,7 +57,7 @@ class OutputWorkpaperStep(PipelineStep):
             # =================================================================
             gs_config = self.config.get('google_sheets', {})
             
-            if gs_config.get('enabled', True):
+            if gs_config.get('enabled', False):
                 try:
                     cred_path = config_manager.get('general', 'cred_path')
                     spreadsheet_url = gs_config.get('spreadsheet_url')
@@ -118,6 +121,10 @@ class OutputWorkpaperStep(PipelineStep):
                     # 輸出到Excel的大entry同步更新至雲表
                     self._write_big_entry(context, gs_manager)
                     
+                    # 輸出APCC手續費到雲表； 
+                    """注意: 執行一次就好!!! 記得關掉"""
+                    # self._write_apcc_data(context, gs_manager)
+                    
                 except Exception as e:
                     self.logger.warning(f"寫入 Google Sheets 失敗: {e}")
                     context.add_warning(f"Google Sheets 寫入失敗: {e}")
@@ -127,120 +134,16 @@ class OutputWorkpaperStep(PipelineStep):
             # =================================================================
             entry_path = output_dir / entry_filename
             self.logger.info(f"輸出 Entry: {entry_path}")
+
+            self._export_to_excel(
+                context, 
+                gs_manager, 
+                entry_path, 
+                output_files, 
+                self.logger,
+                entry_sheets
+            )
             
-            with pd.ExcelWriter(entry_path, engine='openpyxl') as writer:
-                # 大 Entry
-                df_big_entry = context.get_auxiliary_data('big_entry')
-                if df_big_entry is not None:
-                    df_big_entry.to_excel(writer, sheet_name='大entry', index=False)
-                
-                # DFR 驗證
-                df_balance_check = context.get_auxiliary_data('dfr_balance_check')
-                if df_balance_check is not None:
-                    df_balance_check.to_excel(writer, sheet_name='104171 vs DFR', index=False)
-                
-                # 分類驗證
-                df_entry_validation = context.get_auxiliary_data('category_validation')
-                if df_entry_validation is not None:
-                    df_entry_validation.to_excel(writer, sheet_name='分類驗證', index=False)
-
-                # 進Entry Transformer前的驗證
-                entry_source_agg = context.get_auxiliary_data('entry_validation')
-                if df_balance_check is not None:
-                    pd.DataFrame(
-                        entry_source_agg, index=[0]
-                    ).to_excel(writer, sheet_name='Entry Source Validation', index=False)
-                
-                # Entry Temp
-                df_entry_temp = context.get_auxiliary_data('entry_temp')
-                if df_entry_temp is not None:
-                    df_entry_temp.to_excel(writer, sheet_name='entry_temp', index=False)
-                
-                # Entry Long
-                df_entry_long = context.get_auxiliary_data('entry_long_temp')
-                if df_entry_long is not None:
-                    df_entry_long.to_excel(writer, sheet_name='entry_long_temp', index=False)
-
-                # DFR
-                df_dfr = context.get_auxiliary_data('dfr_raw')
-                if df_dfr is not None:
-                    df_dfr.to_excel(writer, sheet_name='dfr', index=False)
-                
-                # DFR 整理明細，含(dfr_result加上)餘額與當日變動、FRR的手續費與匯費
-                dfr_detail = context.get_auxiliary_data('dfr_with_balance')
-                if dfr_detail is not None:
-                    dfr_detail.to_excel(writer, sheet_name='dfr_detail', index=False)
-                
-                # DFR_WP
-                df_dfr_wp = context.get_auxiliary_data('dfr_wp')
-                if df_dfr_wp is not None:
-                    df_dfr_wp.to_excel(writer, sheet_name='dfr_wp', index=False)
-                
-                # APCC Acquiring Charge； ('apcc_acquiring_charge_DW') for 雲表
-                df_apcc = context.get_auxiliary_data('apcc_acquiring_charge')
-                if df_apcc is not None:
-                    df_apcc.to_excel(writer, sheet_name='APCC手續費', index=False)
-                
-                # APCC Validate FRR
-                df_apcc_validate = context.get_auxiliary_data('apcc_validate_frr')
-                if df_apcc_validate is not None:
-                    df_apcc_validate.to_excel(writer, sheet_name='apcc_validate_frr', index=False)
-                
-                # Summary；上去gsheet後再拉下來的
-                df_summary = gs_manager.get_data('acquiring_charge_sum_display', 'A1:Q11')  # ('df_apcc_summary_fin')
-                if df_summary is not None:
-                    df_summary.to_excel(writer, sheet_name='summary_01', index=False)
-
-                # Trust account fee回補normal手續費與調扣的版本
-                df_apcc_topup = context.get_auxiliary_data('apcc_summary')
-                if df_apcc_topup is not None:
-                    df_apcc_topup.to_excel(writer, sheet_name='Trust account fee回補手續費', index=False)
-
-                df_trust_account_fee = context.get_auxiliary_data('trust_account_fee')
-                if df_trust_account_fee is not None:
-                    df_trust_account_fee.to_excel(writer, sheet_name='trust_account_fee', index=True)
-
-                # context.get_auxiliary_data('trust_account_validation')
-                
-                # Validate FRR
-                df_validate_summary = context.get_auxiliary_data('validation_summary')
-                if df_validate_summary is not None:
-                    df_validate_summary.to_excel(writer, sheet_name='validate_frr_summary', index=False)
-
-                # Validate FRR Handling Fee
-                df_validate_handling = context.get_auxiliary_data('validate_frr_handling_fee')
-                if df_validate_handling is not None:
-                    df_validate_handling.to_excel(writer, sheet_name='validate_frr_handling_fee', index=False)
-                
-                # Validate FRR Net Billing
-                df_validate_billing = context.get_auxiliary_data('validate_frr_net_billing')
-                if df_validate_billing is not None:
-                    df_validate_billing.to_excel(writer, sheet_name='validate_frr_net_billing', index=False)
-                
-                # FRR Handling Fee
-                df_frr_handling = context.get_auxiliary_data('frr_handling_fee')
-                if df_frr_handling is not None:
-                    df_frr_handling.to_excel(writer, sheet_name='frr_handling_fee')
-                
-                # FRR Remittance Fee
-                df_frr_remittance = context.get_auxiliary_data('frr_remittance_fee')
-                if df_frr_remittance is not None:
-                    df_frr_remittance.to_excel(writer, sheet_name='frr_remittance_fee')
-
-                # FRR Long Format
-                df_frr_long = context.get_auxiliary_data('frr_long_format')
-                if df_frr_long is not None:
-                    df_frr_long.to_excel(writer, sheet_name='extracted_from_frr', index=False)
-
-                # 歷史紀錄參考
-                acquiring_charge_history = context.get_auxiliary_data('acquiring_charge_history')
-                if acquiring_charge_history is not None:
-                    acquiring_charge_history.to_excel(writer, sheet_name='acquiring_charge_history', index=False)
-
-                apcc_history = context.get_auxiliary_data('apcc_history')
-                if apcc_history is not None:
-                    apcc_history.to_excel(writer, sheet_name='APCC手續費_history', index=False)
-
             output_files.append(str(entry_path))
             self.logger.info("Entry Excel 輸出完成")
             
@@ -333,3 +236,226 @@ class OutputWorkpaperStep(PipelineStep):
             import traceback
             self.logger.error(traceback.format_exc())
         
+    def _export_to_excel(self, context, gs_manager, entry_path, output_files, logger, entry_sheets):
+        """輸出資料到Excel並應用格式"""
+        
+        # 定義所有需要輸出的工作表配置
+        sheets_config = [
+            ('big_entry', '大entry'),
+            ('dfr_balance_check', '104171 vs DFR'),
+            ('category_validation', '分類驗證'),
+            ('entry_validation', 'Entry Source Validation', True),  # 進Entry Transformer前的驗證 # True表示需要轉換為DataFrame
+            ('entry_temp', 'entry_temp'),
+            ('entry_long_temp', 'entry_long_temp'),
+            ('dfr_raw', 'dfr'),
+            ('dfr_with_balance', 'dfr_detail'),  # DFR 整理明細，含(dfr_result加上)餘額與當日變動、FRR的手續費與匯費
+            ('dfr_wp', 'dfr_wp'),
+            ('apcc_acquiring_charge', 'APCC手續費'),                      # SPE Charge SPT
+            ('apcc_validate_frr', 'apcc_validate_frr'),                  # APCC Validate FRR
+            ('apcc_summary', 'Trust account fee回補手續費'),              # Trust account fee回補normal手續費與調扣的版本
+            ('trust_account_fee', 'trust_account_fee', False, True),      # 最後的True表示index=True
+            ('validation_summary', 'validate_frr_summary'),              # Validate FRR
+            ('validate_frr_handling_fee', 'validate_frr_handling_fee'),  # Validate FRR Handling Fee
+            ('validate_frr_net_billing', 'validate_frr_net_billing'),    # Validate FRR Net Billing
+            ('frr_handling_fee', 'frr_handling_fee'),                    # FRR Handling Fee
+            ('frr_remittance_fee', 'frr_remittance_fee'),                # FRR Remittance Fee
+            ('frr_long_format', 'extracted_from_frr'),                   # FRR Long Format
+            ('acquiring_charge_history', 'acquiring_charge_history'),    # 歷史紀錄參考
+            ('apcc_history', 'APCC手續費_history'),                      # 歷史紀錄參考
+        ]
+        
+        with pd.ExcelWriter(entry_path, engine='openpyxl') as writer:
+            # 寫入所有工作表
+            for config in sheets_config:
+                data_key = config[0]
+                sheet_name = config[1]
+                to_dataframe = config[2] if len(config) > 2 else False
+                use_index = config[3] if len(config) > 3 else False
+                
+                data = context.get_auxiliary_data(data_key)
+                
+                if data is not None:
+                    if to_dataframe:
+                        data = pd.DataFrame(data, index=[0])
+                    data.to_excel(writer, sheet_name=sheet_name, index=use_index)
+            
+            # 特殊處理：從Google Sheet讀取summary
+            df_summary = gs_manager.get_data('acquiring_charge_sum_display', 'A1:Q11')
+            if df_summary is not None:
+                df_summary.to_excel(writer, sheet_name='summary_01', index=False)
+        
+        # 重新開啟檔案以應用格式
+        from openpyxl import load_workbook
+        workbook = load_workbook(entry_path)
+        
+        # 對每個工作表應用格式
+        for sheet_name in workbook.sheetnames:
+            ExcelFormatter.apply_formats(workbook, sheet_name)
+
+        # 重新排序工作表
+        desired_order = entry_sheets  # 定義順序
+        for idx, sheet_name in enumerate(desired_order):
+            if sheet_name in workbook.sheetnames:
+                workbook.move_sheet(sheet_name, offset=idx - workbook.index(workbook[sheet_name]))
+        
+        # 儲存格式化後的檔案
+        workbook.save(entry_path)
+        workbook.close()
+        
+        output_files.append(str(entry_path))
+        logger.info("Entry Excel 輸出完成（含格式設定）")
+
+    def _write_apcc_data(self, context, service):
+        try:
+            sheet_name = 'APCC 手續費'
+            service.write_data(
+                context.get_auxiliary_data('apcc_acquiring_charge_DW').astype(object).fillna(''), 
+                sheet_name=sheet_name, 
+                is_append=True
+            )
+        except Exception as e:
+            self.logger.error(f"輸出{sheet_name}失敗: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
+
+        try:
+            sheet_name = 'APCC 手續費驗證'
+            df = context.get_auxiliary_data('apcc_validate_frr')
+            cols = ['bank_code', 'subtotal_wp', 'bank_frr', 'subtotal_frr', 'diff']
+            df = df[cols].sort_values(by='bank_code').assign(end_date=context.get_variable('end_date'))
+            service.write_data(
+                df.astype(object).fillna(''), 
+                sheet_name=sheet_name, 
+                is_append=True
+            )
+        except Exception as e:
+            self.logger.error(f"輸出{sheet_name}失敗: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
+
+
+class ExcelFormatter:
+    """Excel格式設定管理類"""
+    
+    # 自定義數字格式
+    NUMBER_FORMAT_CUSTOM = '#,##0_);[Red](#,##0)'
+    PERCENTAGE_FORMAT = '0.00%'
+    DATE_FORMAT = 'yyyy-mm-dd'
+    
+    # 格式設定配置
+    SHEET_FORMATS = {
+        '大entry': {
+            'freeze_panes': 'D2',
+            'formats': [
+                {'range': 'D2:ZZ1000', 'format': NUMBER_FORMAT_CUSTOM}
+            ]
+        },
+        '104171 vs DFR': {
+            'formats': [
+                {'columns': ['B', 'C', 'D', 'E'], 'format': NUMBER_FORMAT_CUSTOM}
+            ]
+        },
+        'entry_temp': {
+            'formats': [
+                {'columns': 'B:Z', 'format': NUMBER_FORMAT_CUSTOM}
+            ]
+        },
+        'entry_long_temp': {
+            'formats': [
+                {'columns': ['A'], 'format': DATE_FORMAT},
+                {'columns': ['E'], 'format': NUMBER_FORMAT_CUSTOM}
+            ]
+        },
+        'dfr_detail': {
+            'formats': [
+                {'columns': ['A'], 'format': DATE_FORMAT},
+                {'columns': 'B:Z', 'format': NUMBER_FORMAT_CUSTOM}
+            ]
+        },
+        'APCC手續費': {
+            'formats': [
+                {'columns': ['B', 'C', 'D', 'E', 'F', 'G', 'I', 'J'], 'format': NUMBER_FORMAT_CUSTOM},
+                {'columns': ['H'], 'format': PERCENTAGE_FORMAT}
+            ]
+        },
+        'summary_01': {
+            'formats': [
+                {'range': 'B2:N7', 'format': NUMBER_FORMAT_CUSTOM},
+                {'range': 'P2:P7', 'format': NUMBER_FORMAT_CUSTOM},
+                {'range': 'B8:Q9', 'format': PERCENTAGE_FORMAT},
+                {'range': 'O2:O7', 'format': PERCENTAGE_FORMAT},
+                {'range': 'Q2:Q7', 'format': PERCENTAGE_FORMAT}
+            ]
+        },
+        'Trust account fee回補手續費': {
+            'formats': [
+                {'columns': 'B:Z', 'format': NUMBER_FORMAT_CUSTOM}
+            ]
+        },
+        'trust_account_fee': {
+            'formats': [
+                {'columns': 'B:Z', 'format': NUMBER_FORMAT_CUSTOM}
+            ]
+        }
+    }
+    
+    @staticmethod
+    def apply_formats(workbook, sheet_name):
+        """對指定工作表應用格式"""
+        if sheet_name not in ExcelFormatter.SHEET_FORMATS:
+            return
+        
+        ws = workbook[sheet_name]
+        config = ExcelFormatter.SHEET_FORMATS[sheet_name]
+        
+        # 應用凍結窗格
+        if 'freeze_panes' in config:
+            ws.freeze_panes = config['freeze_panes']
+        
+        # 應用格式
+        for format_config in config.get('formats', []):
+            ExcelFormatter._apply_format(ws, format_config)
+    
+    @staticmethod
+    def _apply_format(ws, format_config):
+        """應用單個格式配置"""
+        number_format = format_config.get('format')
+        
+        # 處理範圍格式 (例如: 'B2:N7')
+        if 'range' in format_config:
+            cell_range = format_config['range']
+            for row in ws[cell_range]:
+                for cell in row:
+                    cell.number_format = number_format
+        
+        # 處理列格式
+        elif 'columns' in format_config:
+            columns = format_config['columns']
+            
+            # 處理單個列或列的列表
+            if isinstance(columns, str):
+                if ':' in columns:  # 例如: 'B:Z'
+                    start_col, end_col = columns.split(':')
+                    columns = ExcelFormatter._get_column_range(start_col, end_col)
+                else:
+                    columns = [columns]
+            
+            # 應用格式到每一列
+            for col in columns:
+                col_idx = ExcelFormatter._column_to_index(col)
+                for row in range(2, ws.max_row + 1):  # 從第2行開始(跳過標題)
+                    cell = ws.cell(row=row, column=col_idx)
+                    cell.number_format = number_format
+    
+    @staticmethod
+    def _column_to_index(col_letter):
+        """將列字母轉換為索引"""
+        from openpyxl.utils import column_index_from_string
+        return column_index_from_string(col_letter)
+    
+    @staticmethod
+    def _get_column_range(start_col, end_col):
+        """取得列範圍"""
+        start_idx = ExcelFormatter._column_to_index(start_col)
+        end_idx = ExcelFormatter._column_to_index(end_col)
+        return [get_column_letter(i) for i in range(start_idx, end_idx + 1)]
