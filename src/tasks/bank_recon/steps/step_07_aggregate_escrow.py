@@ -91,7 +91,7 @@ class AggregateEscrowStep(PipelineStep):
             db_path = context.get_variable('db_path')
             log_file = context.get_variable('log_file')
             
-            with DuckDBManager(db_path=db_path, log_file=log_file, log_level="DEBUG") as db_manager:
+            with DuckDBManager(db_path=db_path) as db_manager:
                 query = """
                 SELECT * FROM invoice_details
                 """
@@ -265,7 +265,7 @@ class AggregateEscrowStep(PipelineStep):
     def _get_escrow_inv_raw(self, tables: list, db_path, log_file) -> pd.DataFrame:
         dfs = []
         for name in tables:
-            with DuckDBManager(db_path=db_path, log_file=log_file, log_level="DEBUG") as db_manager:
+            with DuckDBManager(db_path=db_path) as db_manager:
                 query = f"""
                 SELECT * FROM {name}
                 """

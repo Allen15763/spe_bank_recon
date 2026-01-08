@@ -276,9 +276,7 @@ class LoadInstallmentStep(PipelineStep):
         # Step 2: 從資料庫取得日期範圍
         # ========================================================================
         with DuckDBManager(
-            db_path=context.get_variable('db_path'),
-            log_file=context.get_variable('log_file'),
-            log_level="DEBUG"
+            db_path=context.get_variable('db_path')
         ) as db:
             # 分期：使用 disbursement_date 過濾（處理日）
             install_dates = db.query_to_df(

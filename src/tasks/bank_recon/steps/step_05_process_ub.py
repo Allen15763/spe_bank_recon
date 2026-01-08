@@ -218,7 +218,7 @@ class ProcessUBStep(PipelineStep):
                 )
                 
                 # 處理資料
-                with DuckDBManager(db_path=db_path, log_file=log_file, log_level="DEBUG") as db_manager:
+                with DuckDBManager(db_path=db_path) as db_manager:
                     container = processor.process(
                         db_manager=db_manager,
                         beg_date=beg_date,

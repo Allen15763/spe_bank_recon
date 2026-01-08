@@ -7,6 +7,7 @@ import os
 import sys
 import logging
 import datetime
+import threading
 from typing import Dict, List, Any, Optional, Union
 from pathlib import Path
 
@@ -35,25 +36,38 @@ def get_project_root() -> Path:
 
 
 class ConfigManager:
-    """配置管理器，單例模式"""
-    
+    """
+    配置管理器，單例模式
+
+    線程安全的單例實現，使用雙檢查鎖定模式確保多線程環境下的安全性。
+    """
+
     _instance = None
     _initialized = False
-    
+    _lock = threading.Lock()  # 線程安全鎖
+
     def __new__(cls):
+        """創建單例實例（線程安全）"""
         if cls._instance is None:
-            cls._instance = super(ConfigManager, cls).__new__(cls)
+            with cls._lock:  # 雙檢查鎖定
+                if cls._instance is None:
+                    cls._instance = super(ConfigManager, cls).__new__(cls)
         return cls._instance
-    
+
     def __init__(self):
+        """初始化配置管理器（線程安全）"""
         if self._initialized:
             return
-            
-        self._config_data: Dict[str, Any] = {}
-        self._simple_logger = None
-        self._setup_simple_logger()
-        self._load_config()
-        self._initialized = True
+
+        with self._lock:  # 初始化時也需要鎖
+            if self._initialized:  # 雙檢查
+                return
+
+            self._config_data: Dict[str, Any] = {}
+            self._simple_logger = None
+            self._setup_simple_logger()
+            self._load_config()
+            self._initialized = True
     
     def _setup_simple_logger(self) -> None:
         """設置簡單的日誌記錄器，避免循環導入"""
