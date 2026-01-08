@@ -1,5 +1,7 @@
 """
 檔案操作相關工具函數
+
+迭代 2 更新: 添加完整的日誌記錄，消除靜默失敗問題。
 """
 
 import os
@@ -11,6 +13,11 @@ import hashlib
 import time
 import logging
 import tomllib
+
+from src.utils.logging import get_logger
+
+# 初始化日誌記錄器
+logger = get_logger('utils.file_utils')
 
 
 def get_resource_path(relative_path: str) -> str:
@@ -32,35 +39,41 @@ def get_resource_path(relative_path: str) -> str:
 def validate_file_path(file_path: str, check_exists: bool = True) -> bool:
     """
     驗證檔案路徑是否有效
-    
+
     Args:
         file_path: 檔案路徑
         check_exists: 是否檢查檔案存在
-        
+
     Returns:
         bool: 是否有效
     """
     if not file_path or not isinstance(file_path, str):
+        logger.warning(f"無效的檔案路徑: {file_path}")
         return False
-    
+
     try:
         path = Path(file_path)
-        
+
         # 檢查路徑格式是否有效
         if not path.name:
+            logger.warning(f"路徑格式無效: {file_path}")
             return False
-        
+
         # 檢查檔案是否存在
         if check_exists and not path.exists():
+            logger.warning(f"檔案不存在: {file_path}")
             return False
-        
+
         # 檢查是否為檔案（而非目錄）
         if check_exists and not path.is_file():
+            logger.warning(f"路徑不是檔案: {file_path}")
             return False
-        
+
+        logger.debug(f"檔案路徑驗證通過: {file_path}")
         return True
-        
-    except (OSError, ValueError):
+
+    except (OSError, ValueError) as e:
+        logger.error(f"檔案路徑驗證失敗: {file_path}, 錯誤: {e}")
         return False
 
 
@@ -130,17 +143,23 @@ def is_csv_file(file_path: str) -> bool:
 def ensure_directory_exists(directory_path: str) -> bool:
     """
     確保目錄存在，如不存在則創建
-    
+
     Args:
         directory_path: 目錄路徑
-        
+
     Returns:
         bool: 操作是否成功
     """
     try:
-        Path(directory_path).mkdir(parents=True, exist_ok=True)
+        path = Path(directory_path)
+        if not path.exists():
+            logger.info(f"創建目錄: {directory_path}")
+            path.mkdir(parents=True, exist_ok=True)
+        else:
+            logger.debug(f"目錄已存在: {directory_path}")
         return True
-    except OSError:
+    except OSError as e:
+        logger.error(f"創建目錄失敗: {directory_path}, 錯誤: {e}")
         return False
 
 
@@ -213,17 +232,24 @@ def get_unique_filename(base_path: str, filename: str) -> str:
 def get_file_info(file_path: str) -> Dict[str, Any]:
     """
     獲取檔案信息
-    
+
     Args:
         file_path: 檔案路徑
-        
+
     Returns:
         Dict[str, Any]: 檔案信息字典
     """
     try:
         path = Path(file_path)
+
+        if not path.exists():
+            logger.warning(f"檔案不存在: {file_path}")
+            return {}
+
         stat = path.stat()
-        
+
+        logger.debug(f"成功獲取檔案信息: {file_path} (大小: {stat.st_size} bytes)")
+
         return {
             'name': path.name,
             'stem': path.stem,
@@ -237,7 +263,8 @@ def get_file_info(file_path: str) -> Dict[str, Any]:
             'exists': path.exists(),
             'absolute_path': str(path.absolute())
         }
-    except (OSError, AttributeError):
+    except (OSError, AttributeError, PermissionError) as e:
+        logger.error(f"獲取檔案信息失敗: {file_path}, 錯誤: {e}")
         return {}
 
 
@@ -267,35 +294,40 @@ def calculate_file_hash(file_path: str, algorithm: str = 'md5') -> Optional[str]
 def copy_file_safely(src_path: str, dst_path: str, overwrite: bool = False) -> bool:
     """
     安全地複製檔案
-    
+
     Args:
         src_path: 來源檔案路徑
         dst_path: 目標檔案路徑
         overwrite: 是否覆蓋現有檔案
-        
+
     Returns:
         bool: 操作是否成功
     """
     try:
         src = Path(src_path)
         dst = Path(dst_path)
-        
+
         # 檢查來源檔案是否存在
         if not src.exists():
+            logger.warning(f"來源檔案不存在: {src_path}")
             return False
-        
+
         # 檢查目標檔案是否已存在
         if dst.exists() and not overwrite:
+            logger.warning(f"目標檔案已存在且不允許覆蓋: {dst_path}")
             return False
-        
+
         # 確保目標目錄存在
         dst.parent.mkdir(parents=True, exist_ok=True)
-        
+
         # 複製檔案
+        logger.info(f"複製檔案: {src_path} -> {dst_path}")
         shutil.copy2(src, dst)
+        logger.debug(f"檔案複製成功")
         return True
-        
-    except (OSError, shutil.Error):
+
+    except (OSError, shutil.Error) as e:
+        logger.error(f"檔案複製失敗: {src_path} -> {dst_path}, 錯誤: {e}")
         return False
 
 
