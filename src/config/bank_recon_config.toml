@@ -11,6 +11,24 @@ name = "bank_recon"
 description = "SPE 銀行對帳與分期報表處理任務"
 version = "2.0.0"
 
+# ============================================================
+# Pipeline 配置 (迭代 3 新增)
+# ============================================================
+
+[pipeline.bank_processing]
+# 啟用的銀行列表 (按處理順序)
+# 可在此控制哪些銀行參與處理，以及處理順序
+enabled_banks = ["cub", "ctbc", "nccc", "ub", "taishi"]
+
+# 處理模式
+# - "sequential": 順序處理（默認）
+# - "parallel": 並行處理（未來支持）
+processing_mode = "sequential"
+
+# 如果設置為 true，只處理 enabled=true 的銀行
+# 如果設置為 false，enabled_banks 列表中的銀行都會被處理
+respect_bank_enabled_flag = true
+
 [dates]
 # 預設日期範圍 (可從命令列覆寫) - Manual
 # current_period_start = "2025-10-01"

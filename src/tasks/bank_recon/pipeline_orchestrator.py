@@ -355,41 +355,73 @@ class BankReconTask:
         ))
     
     def _add_bank_processing_steps(self, pipeline: Pipeline):
-        """添加各銀行處理步驟"""
-        # 國泰世華
-        pipeline.add_step(ProcessCUBStep(
-            name="Process_CUB",
-            description="處理國泰世華銀行對帳",
-            config=self.config
-        ))
-        
-        # 中國信託
-        pipeline.add_step(ProcessCTBCStep(
-            name="Process_CTBC",
-            description="處理中國信託銀行對帳",
-            config=self.config
-        ))
-        
-        # NCCC
-        pipeline.add_step(ProcessNCCCStep(
-            name="Process_NCCC",
-            description="處理 NCCC 銀行對帳",
-            config=self.config
-        ))
-        
-        # 聯邦銀行
-        pipeline.add_step(ProcessUBStep(
-            name="Process_UB",
-            description="處理聯邦銀行對帳",
-            config=self.config
-        ))
-        
-        # 台新銀行
-        pipeline.add_step(ProcessTaishiStep(
-            name="Process_Taishi",
-            description="處理台新銀行對帳",
-            config=self.config
-        ))
+        """
+        添加各銀行處理步驟（配置驅動 - 迭代 3）
+
+        從配置文件讀取啟用的銀行列表，動態添加對應步驟。
+        """
+        # 步驟類映射
+        step_classes = {
+            'cub': ProcessCUBStep,
+            'ctbc': ProcessCTBCStep,
+            'nccc': ProcessNCCCStep,
+            'ub': ProcessUBStep,
+            'taishi': ProcessTaishiStep,
+        }
+
+        # 銀行名稱映射（用於步驟命名）
+        bank_names = {
+            'cub': 'CUB',
+            'ctbc': 'CTBC',
+            'nccc': 'NCCC',
+            'ub': 'UB',
+            'taishi': 'Taishi'
+        }
+
+        # 從配置讀取啟用的銀行列表
+        pipeline_config = self.config.get('pipeline', {}).get('bank_processing', {})
+        enabled_banks = pipeline_config.get('enabled_banks', [])
+        respect_enabled_flag = pipeline_config.get('respect_bank_enabled_flag', True)
+
+        # 如果配置中沒有指定，則使用所有銀行（向後兼容）
+        if not enabled_banks:
+            enabled_banks = ['cub', 'ctbc', 'nccc', 'ub', 'taishi']
+            self.logger.warning("未找到 pipeline.bank_processing.enabled_banks 配置，使用默認銀行列表")
+
+        # 如果需要尊重銀行的 enabled 標誌，則過濾
+        if respect_enabled_flag:
+            original_count = len(enabled_banks)
+            enabled_banks = [
+                bank_code for bank_code in enabled_banks
+                if self.config.get('banks', {}).get(bank_code, {}).get('enabled', True)
+            ]
+            if len(enabled_banks) < original_count:
+                self.logger.info(f"根據 enabled 標誌過濾，從 {original_count} 個減少到 {len(enabled_banks)} 個銀行")
+
+        # 動態添加步驟
+        for bank_code in enabled_banks:
+            if bank_code not in step_classes:
+                self.logger.warning(f"未知的銀行代碼: {bank_code}，跳過")
+                continue
+
+            bank_config = self.config.get('banks', {}).get(bank_code, {})
+            if not bank_config:
+                self.logger.warning(f"找不到銀行 {bank_code} 的配置，跳過")
+                continue
+
+            step_class = step_classes[bank_code]
+            bank_name_upper = bank_names.get(bank_code, bank_code.upper())
+
+            pipeline.add_step(step_class(
+                name=f"Process_{bank_name_upper}",
+                description=f"處理{bank_config.get('name', bank_code)}銀行對帳",
+                config=self.config
+            ))
+
+            self.logger.info(f"已添加銀行處理步驟: {bank_config.get('name', bank_code)} ({bank_code})")
+
+        if not enabled_banks:
+            self.logger.warning("沒有啟用的銀行，銀行處理步驟為空")
     
     def _add_escrow_aggregation_step(self, pipeline: Pipeline):
         """添加 Escrow 匯總步驟"""
