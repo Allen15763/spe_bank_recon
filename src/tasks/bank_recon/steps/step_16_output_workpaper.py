@@ -78,8 +78,7 @@ class OutputWorkpaperStep(PipelineStep):
                         is_append = modes_config.get('acquiring_charge_raw', 'append') == 'append'
                         
                         # 準備資料
-                        df_to_write = df_apcc_summary_long.copy()
-                        df_to_write['period'] = current_month
+                        df_to_write = df_apcc_summary_long.copy().drop('bank_and_amt_type', axis=1)
                         df_to_write['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                         
                         # 會計確認無誤後才上傳
@@ -95,7 +94,8 @@ class OutputWorkpaperStep(PipelineStep):
                         
                         # 準備資料
                         df_to_write = df_entry_long.copy()
-                        df_to_write['period'] = current_month
+                        df_balance = self._calculate_entry_ending_balance(df_to_write)
+                        df_to_write = pd.concat([df_to_write, df_balance], ignore_index=True)
                         df_to_write['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                         
                         # 會計確認無誤後才上傳
@@ -330,7 +330,43 @@ class OutputWorkpaperStep(PipelineStep):
             import traceback
             self.logger.error(traceback.format_exc())
 
+    def _calculate_entry_ending_balance(self, df, key: Any = 'account_no') -> pd.DataFrame:
+        """
+        計算大entry資產負債科目的期末餘額
+            預設以科目代號為主鍵聚合
+        """
+        if isinstance(key, str):
+            try:
+                df_copy = df.copy()
+                mask_account = df_copy[key].str.contains('^1|2', na=False)
 
+                df_agg = df_copy.loc[mask_account].groupby([key]).amount.sum().map(lambda x: int(x))
+                
+                value_date = pd.NA
+                value_type = '調整後期末餘額'
+                value_account = df_agg.index
+                value_amount = df_agg.values
+                value_desc = (df_copy
+                              .loc[:, ['account_no', 'account_desc']]
+                              .drop_duplicates()
+                              .set_index('account_no')
+                              .to_dict()['account_desc'])
+                value_period = df_copy.period.unique()[0]
+
+                result_df = pd.DataFrame(data={
+                    'accounting_date': value_date,
+                    'transaction_type': value_type,
+                    'account_no': value_account,
+                    'account_desc': pd.NA,
+                    'amount': value_amount,
+                    'period': value_period,
+                })
+                result_df['account_desc'] = result_df['account_no'].map(value_desc)
+                return result_df
+            except Exception as err:
+                self.logger.error(f"期末餘額計算失敗: {err}")
+                return df
+        
 class ExcelFormatter:
     """Excel格式設定管理類
     
