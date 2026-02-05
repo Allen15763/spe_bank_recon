@@ -1,21 +1,30 @@
 import duckdb
 import pandas as pd
-from loguru import logger
 from typing import Optional, Dict, Any
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 import time
-import sys
 import os
+
+from src.utils.logging import get_logger
 
 
 class DuckDBManager:
-    """DuckDB 資料庫管理器 - 使用 loguru 的改進版"""
+    """
+    DuckDB 資料庫管理器
 
-    def __init__(self, db_path: str = ":memory:",
-                 log_file: Optional[str] = None,
-                 log_level: str = "INFO",
-                 enable_console_log: bool = True):
+    使用項目統一的日誌系統進行日誌記錄
+    """
 
+    def __init__(
+        self,
+        db_path: str = ":memory:"
+    ):
+        """
+        初始化 DuckDB 管理器
+
+        Args:
+            db_path: 資料庫路徑，默認為內存模式 ":memory:"
+        """
         os.environ['TZ'] = 'Asia/Taipei'
         if hasattr(time, 'tzset'):
             os.environ['TZ'] = 'America/New_York'  # Example timezone
@@ -26,63 +35,10 @@ class DuckDBManager:
         self.db_path = db_path
         self.conn = None
 
-        # 設定專屬的日誌系統
-        self.logger = self._setup_loguru_logger(log_file, log_level, enable_console_log)
+        # 使用項目統一的日誌系統
+        self.logger = get_logger('database.duckdb')
 
         self._connect()
-
-    def _setup_loguru_logger(self, log_file: Optional[str] = None,
-                             log_level: str = "INFO",
-                             enable_console_log: bool = True):
-        """設定 loguru 日誌系統"""
-
-        # 移除 loguru 的預設 handler 以避免重複
-        logger.remove()
-
-        # 設定日誌格式
-        log_format = (
-            "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
-            "<level>{level: <8}</level> | "
-            "<cyan>DuckDBManager</cyan> | "
-            "<level>{message}</level>"
-        )
-        # Taiwan timezone
-        taiwan_tz = timezone(timedelta(hours=8))
-
-        # Console 輸出 (Terminal)
-        if enable_console_log:
-            logger.add(
-                sys.stdout,
-                format=log_format,
-                level=log_level,
-                colorize=True,
-                enqueue=True,  # 線程安全
-            )
-
-        # 檔案輸出
-        if log_file:
-            # 確保目錄存在
-            log_dir = os.path.dirname(log_file)
-            if log_dir and not os.path.exists(log_dir):
-                os.makedirs(log_dir)
-        else:
-            # 預設日誌檔案
-            timestamp = datetime.now(taiwan_tz).strftime('%Y%m%d')
-            log_file = f"duckdb_manager_{timestamp}.log"
-
-        # 添加檔案輸出
-        logger.add(
-            log_file,
-            format=log_format,
-            level=log_level,
-            rotation="10 MB",  # 檔案大小輪換
-            retention="30 days",  # 保留30天
-            compression="zip",  # 壓縮舊檔案
-            encoding="utf-8",
-            enqueue=True,  # 線程安全
-        )
-
-        return logger
 
     def _connect(self):
         """建立資料庫連接"""
@@ -164,7 +120,7 @@ class DuckDBManager:
             # 插入資料
             self.conn.sql(f'INSERT INTO "{table_name}" SELECT * FROM df')
 
-            self.logger.success(f"✅ 成功建立表格 '{table_name}'，插入 {len(df):,} 筆資料")
+            self.logger.info(f"✅ 成功建立表格 '{table_name}'，插入 {len(df):,} 筆資料")
             return True
 
         except Exception as e:
@@ -180,7 +136,7 @@ class DuckDBManager:
                 raise ValueError(f"表格 {table_name} 不存在")
 
             self.conn.sql(f'INSERT INTO "{table_name}" SELECT * FROM df')
-            self.logger.success(f"✅ 成功插入 {len(df):,} 筆資料到 '{table_name}'")
+            self.logger.info(f"✅ 成功插入 {len(df):,} 筆資料到 '{table_name}'")
             return True
 
         except Exception as e:
@@ -220,7 +176,7 @@ class DuckDBManager:
             # 插入新資料
             result = self.insert_df_into_table(table_name, df)
             if result:
-                self.logger.success("✅ Upsert 操作完成")
+                self.logger.info("✅ Upsert 操作完成")
             return result
 
         except Exception as e:
@@ -331,7 +287,7 @@ class DuckDBManager:
             alter_query = f'ALTER TABLE "{table_name}" ALTER COLUMN "{column_name}" TYPE {new_type}'
             self.conn.sql(alter_query)
 
-            self.logger.success(f"✅ 成功修改欄位 '{column_name}' 型態為 {new_type}")
+            self.logger.info(f"✅ 成功修改欄位 '{column_name}' 型態為 {new_type}")
 
             # 驗證修改結果
             schema = self.describe_table(table_name)
@@ -441,7 +397,7 @@ class DuckDBManager:
             remaining_dirty = verify_result.iloc[0]['remaining_dirty'] if not verify_result.empty else 0
 
             if remaining_dirty == 0:
-                self.logger.success(f"✅ 成功清理 {dirty_count} 筆資料")
+                self.logger.info(f"✅ 成功清理 {dirty_count} 筆資料")
             else:
                 self.logger.warning(f"⚠️ 清理完成，但仍有 {remaining_dirty} 筆資料可能需要額外處理")
 
@@ -506,7 +462,7 @@ class DuckDBManager:
             )
 
             if conversion_success:
-                self.logger.success(f"🎉 成功完成清理和轉換！欄位 '{column_name}' 現在是 {target_type} 型態")
+                self.logger.info(f"🎉 成功完成清理和轉換！欄位 '{column_name}' 現在是 {target_type} 型態")
 
             return conversion_success
 
@@ -644,7 +600,7 @@ class DuckDBManager:
             drop_sql = f'DROP TABLE {"IF EXISTS " if if_exists else ""}"{table_name}"'
             self.conn.sql(drop_sql)
 
-            self.logger.success(f"✅ 成功刪除表格 '{table_name}' (原有 {row_count:,} 筆資料)")
+            self.logger.info(f"✅ 成功刪除表格 '{table_name}' (原有 {row_count:,} 筆資料)")
             return True
 
         except Exception as e:
@@ -674,7 +630,7 @@ class DuckDBManager:
             # 清空表格
             self.conn.sql(f'DELETE FROM "{table_name}"')
 
-            self.logger.success(f"✅ 成功清空表格 '{table_name}' (刪除了 {row_count:,} 筆資料)")
+            self.logger.info(f"✅ 成功清空表格 '{table_name}' (刪除了 {row_count:,} 筆資料)")
             return True
 
         except Exception as e:
@@ -695,7 +651,6 @@ class DuckDBManager:
             bool: 是否成功備份
         """
         try:
-            from datetime import datetime
 
             if backup_path is None:
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -721,7 +676,7 @@ class DuckDBManager:
             table_info = self.get_table_info(table_name)
             row_count = table_info.get('row_count', 0)
 
-            self.logger.success(f"✅ 成功備份表格 '{table_name}' 到 '{backup_path}' ({row_count:,} 筆資料)")
+            self.logger.info(f"✅ 成功備份表格 '{table_name}' 到 '{backup_path}' ({row_count:,} 筆資料)")
             return True
 
         except Exception as e:
@@ -756,7 +711,7 @@ class DuckDBManager:
 
             # 提交事務
             self.conn.sql("COMMIT")
-            self.logger.success(f"✅ 成功執行所有 {len(operations)} 個操作")
+            self.logger.info(f"✅ 成功執行所有 {len(operations)} 個操作")
             return True
 
         except Exception as e:
@@ -829,7 +784,7 @@ class DuckDBManager:
                     except Exception as e:
                         results['custom_checks'][check_name] = f"Error: {e}"
 
-            self.logger.success("✅ 完成資料完整性驗證")
+            self.logger.info("✅ 完成資料完整性驗證")
             return results
 
         except Exception as e:
@@ -849,9 +804,7 @@ def create_table(table_name: str,
 
     # 建立DuckDB管理器，同時輸出到terminal和檔案
     with DuckDBManager(
-        db_path=db_path,
-        log_file=log_file,
-        log_level=log_level  # 詳細日誌
+        db_path=db_path
     ) as db_manager:
 
         # 建立表格（正確的方式，只會插入一次）
@@ -882,9 +835,7 @@ def insert_table(table_name: str,
 
     # 建立DuckDB管理器，同時輸出到terminal和檔案
     with DuckDBManager(
-        db_path=db_path,
-        log_file=log_file,
-        log_level=log_level  # 詳細日誌
+        db_path=db_path
     ) as db_manager:
 
         # 建立表格（正確的方式，只會插入一次）
@@ -911,9 +862,7 @@ def alter_column_dtype(table_name: str,
                        log_level: str = "DEBUG"):
 
     with DuckDBManager(
-        db_path=db_path,
-        log_file=log_file,
-        log_level=log_level
+        db_path=db_path
     ) as db_manager:
 
         # Method 1: Preview the data first to understand the format
@@ -963,9 +912,7 @@ def alter_column_dtype(table_name: str,
 
 def drop_table(table_name: str, db_path="bank_statements.duckdb", log_file="duckdb_operations.log", log_level="DEBUG"):
     with DuckDBManager(
-        db_path=db_path,
-        log_file=log_file,
-        log_level=log_level
+        db_path=db_path
     ) as db_manager:
 
         query = \
@@ -982,9 +929,7 @@ def backup_table(table_name: str,
                  backup_format: str = 'parquet', 
                  backup_path: str = None):
     with DuckDBManager(
-        db_path=db_path,
-        log_file=log_file,
-        log_level=log_level
+        db_path=db_path
     ) as db_manager:
 
         db_manager.backup_table(
@@ -997,4 +942,4 @@ if __name__ == "__main__":
     DB_PATH = "bank_statements.duckdb"
     LOG_FILE = "duckdb_operations.log"
     print(1)
-
+    

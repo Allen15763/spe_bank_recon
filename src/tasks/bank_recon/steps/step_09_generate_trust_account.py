@@ -89,44 +89,54 @@ class GenerateTrustAccountStep(PipelineStep):
             validation = self.validate(df_with_subtotal, df_escrow)
             
             # ===============================================================
-            # 6. 輸出 Excel
-            # ===============================================================
-            output_path = Path(context.get_variable('output_path', './output/'))
-            filename = context.get_variable('trust_account_filename', 
-                                            'filing data for Trust Account Fee Accrual-SPETW.xlsx')
-            output_file = output_path / filename
-            
-            output_path.mkdir(parents=True, exist_ok=True)
-            
-            with pd.ExcelWriter(output_file, engine='xlsxwriter') as writer:
-                df_with_subtotal.to_excel(writer, sheet_name='trust_account_fee')
-                df_escrow.to_excel(writer, sheet_name='escrow_inv', index=False)
-                context.get_auxiliary_data('invoice_summary').to_excel(
-                    writer, sheet_name='invoice_summary', index=False)
-                context.get_auxiliary_data('invoice_details').to_excel(
-                    writer, sheet_name='invoice_details', index=False)
-                validation.to_excel(writer, sheet_name='trust_account_validation')
-                context.get_auxiliary_data('escrow_inv_raw').to_excel(
-                    writer, sheet_name='escrow_inv_raw', index=False)
-                
-                # 各銀行分期明細
-                for (df, bank) in bank_data:
-                    df.to_excel(writer, sheet_name=bank, index=False)
-            
-            self.logger.info(f"成功輸出: {output_file}")
-            
-            # ===============================================================
-            # 7. 儲存到 Context
+            # 6. 儲存到 Context
             # ===============================================================
             context.add_auxiliary_data('trust_account_fee', df_with_subtotal)
             context.add_auxiliary_data('trust_account_validation', validation)
-            
-            return StepResult(
-                step_name=self.name,
-                status=StepStatus.SUCCESS,
-                message=f"成功生成 Trust Account Fee 工作底稿: {filename}",
-                metadata={'output_file': str(output_file)}
-            )
+
+            # ===============================================================
+            # 7. 輸出 Excel
+            # ===============================================================
+            if self._should_generate_excel(context):
+                output_path = Path(context.get_variable('output_path', './output/'))
+                filename = context.get_variable('trust_account_filename', 
+                                                'filing data for Trust Account Fee Accrual-SPETW.xlsx')
+                output_file = output_path / filename
+                
+                output_path.mkdir(parents=True, exist_ok=True)
+                
+                with pd.ExcelWriter(output_file, engine='xlsxwriter') as writer:
+                    df_with_subtotal.to_excel(writer, sheet_name='trust_account_fee')
+                    df_escrow.to_excel(writer, sheet_name='escrow_inv', index=False)
+                    context.get_auxiliary_data('invoice_summary').to_excel(
+                        writer, sheet_name='invoice_summary', index=False)
+                    context.get_auxiliary_data('invoice_details').to_excel(
+                        writer, sheet_name='invoice_details', index=False)
+                    validation.to_excel(writer, sheet_name='trust_account_validation')
+                    context.get_auxiliary_data('escrow_inv_raw').to_excel(
+                        writer, sheet_name='escrow_inv_raw', index=False)
+                    
+                    # 各銀行分期明細
+                    for (df, bank) in bank_data:
+                        df.to_excel(writer, sheet_name=bank, index=False)
+                
+                self.logger.info(f"成功輸出: {output_file}")
+                return StepResult(
+                    step_name=self.name,
+                    status=StepStatus.SUCCESS,
+                    message=f"成功生成 Trust Account Fee 工作底稿: {filename}",
+                    metadata={'output_file': str(output_file)}
+                )
+            else:
+                self.logger.info("跳過 Excel 輸出 (full_with_entry 模式，將由 Step 16 輸出)")
+                output_file = None
+                output_message = "Trust Account Fee 計算完成 (Excel 將在 Step 16 輸出)"
+                return StepResult(
+                    step_name=self.name,
+                    status=StepStatus.SUCCESS,
+                    message=output_message,
+                    metadata={'output_file': str(output_file) if output_file else None}
+                )
             
         except Exception as e:
             self.logger.error(f"生成 Trust Account Fee 失敗: {str(e)}")
@@ -198,6 +208,15 @@ class GenerateTrustAccountStep(PipelineStep):
         val_fee['diff'] = val_fee.iloc[:, 0] - val_fee.iloc[:, 1]
         
         return pd.concat([val_amt, val_fee], axis=1)
+    
+    def _should_generate_excel(self, context: ProcessingContext) -> bool:
+        """判斷是否應產生 Excel 輸出。
+
+        - full, installment: 產生 Excel（step 09 是最終輸出）
+        - full_with_entry: 不產生 Excel（step 16 會產生最終 workpaper）
+        """
+        pipeline_mode = context.get_variable('pipeline_mode', 'full')
+        return pipeline_mode in ('full', 'installment')
 
 
 if __name__ == "__main__":

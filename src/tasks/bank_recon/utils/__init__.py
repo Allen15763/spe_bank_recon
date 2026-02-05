@@ -3,6 +3,7 @@
 """
 
 from .bank_processor import BankProcessor
+from .summary_formatter import BankSummaryFormatter
 from .validation import (
     validate_amount,
     compare_amounts,
@@ -78,6 +79,7 @@ from .entry_processor import (
 
 __all__ = [
     'BankProcessor',
+    'BankSummaryFormatter',
     'validate_amount',
     'compare_amounts',
     'validate_dataframe',

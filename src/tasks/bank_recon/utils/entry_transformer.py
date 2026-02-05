@@ -101,7 +101,7 @@ def process_accounting_entries(df_dfr_wp: pd.DataFrame,
         acc_104171_內扣CTBCCC匯費=remittance_fee,
         acc_104171_ReceivedCTBCSPT=received_ctbc_spt_104171,
         acc_104171_ReceivedCTBCSPT退匯=unsuccessful_ach,
-        acc_104171_OutCTBCSPT=outbound,
+        acc_104171_OutCTBCSPT=outbound + interest_values * .1,
         acc_104171_others=cub_rebate_amount,
         
         # 科目 999995 - Cash Clearing
@@ -113,7 +113,7 @@ def process_accounting_entries(df_dfr_wp: pd.DataFrame,
         
         # 科目 200701 - 應付帳款
         acc_200701_ReceivedCTBCSPT退匯=unsuccessful_ach * -1,
-        acc_200701_OutCTBCSPT=outbound * -1,
+        acc_200701_OutCTBCSPT=outbound * -1 - interest_values * .1,
         
         # 科目 440001 - 利息收入
         acc_440001_interest=interest_values * -1,
