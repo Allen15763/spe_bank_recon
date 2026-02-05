@@ -81,9 +81,9 @@ class OutputWorkpaperStep(PipelineStep):
                         df_to_write = df_apcc_summary_long.copy().drop('bank_and_amt_type', axis=1)
                         df_to_write['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                         
-                        # 會計確認無誤後才上傳
+                        """注意:Append寫入，會計確認無誤後才上傳"""
                         # gs_manager.write_data(df_to_write, acquiring_sheet, is_append=is_append)
-                        self.logger.info(f"已寫入 Google Sheets: {acquiring_sheet}")
+                        # self.logger.info(f"已寫入 Google Sheets: {acquiring_sheet}")
                     
                     # 3.2 寫入 大entry_raw (append)
                     big_entry_sheet = output_config.get('big_entry_raw_sheet', '大entry_raw')
@@ -98,9 +98,9 @@ class OutputWorkpaperStep(PipelineStep):
                         df_to_write = pd.concat([df_to_write, df_balance], ignore_index=True)
                         df_to_write['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                         
-                        # 會計確認無誤後才上傳
+                        """注意:Append寫入，會計確認無誤後才上傳"""
                         # gs_manager.write_data(df_to_write, big_entry_sheet, is_append=is_append)
-                        self.logger.info(f"已寫入 Google Sheets: {big_entry_sheet}")
+                        # self.logger.info(f"已寫入 Google Sheets: {big_entry_sheet}")
                     
                     # 3.3 寫入 acquiring_charge_sum_display (overwrite)
                     display_sheet = output_config.get('acquiring_charge_sum_display_sheet', 
@@ -122,7 +122,7 @@ class OutputWorkpaperStep(PipelineStep):
                     self._write_big_entry(context, gs_manager)
                     
                     # 輸出APCC手續費到雲表； 
-                    """注意: 執行一次就好!!! 記得關掉"""
+                    """注意:Append寫入"""
                     # self._write_apcc_data(context, gs_manager)
                     
                 except Exception as e:

@@ -312,6 +312,9 @@ class LoadInstallmentStep(PipelineStep):
             )
             results['3期']['total_claimed'] += df_install.loc[mask_adj, '請/調金額'].sum()
             results['3期']['total_service_fee'] += df_install.loc[mask_adj, '實際手續費'].sum()
+            a = df_install.loc[mask_adj, '實際手續費'].sum()
+            b = df_install.loc[mask_adj, '請/調金額'].sum()
+            self.logger.info(f"分期帳務調整: 手續費 {a:,.0f} / 請款 {b:,.0f}\t已調至3期")
         else:
             results = {f'{p}期': {'total_claimed': 0, 'total_service_fee': 0} 
                        for p in [3, 6, 12, 24]}
