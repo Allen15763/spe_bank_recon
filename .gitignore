@@ -6,7 +6,6 @@ input/
 secret/
 Pipfile
 Pipfile.lock
-test_*.py
 note_pip_google API.txt
 static/
 processing_worker.py

@@ -639,6 +639,9 @@ class BankReconTask:
             
             # 準備上下文
             context = self.prepare_context(**kwargs)
+
+            # 將 pipeline mode 存入 context
+            context.set_variable('pipeline_mode', mode)
             
             # 構建 Pipeline
             pipeline = self.build_pipeline(mode=mode)
