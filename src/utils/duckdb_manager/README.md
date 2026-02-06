@@ -1,6 +1,6 @@
 # DuckDB Manager 模組使用文件
 
-> **版本**: 2.0.0
+> **版本**: 2.1.0
 > **更新日期**: 2026-02
 > **作者**: SPE Bank Recon Team
 
@@ -31,7 +31,7 @@ DuckDB Manager 是一個高可用、可移植的 DuckDB 資料庫管理模組，
 
 ### 主要特性
 
-- **多種配置方式**: 支援字串路徑、字典、dataclass、TOML 檔案
+- **多種配置方式**: 支援字串路徑、字典、dataclass、TOML 檔案、YAML 檔案
 - **可插拔日誌**: 支援外部日誌器注入或使用內建日誌
 - **完整 CRUD**: 建立、讀取、更新、刪除操作
 - **Schema 遷移**: 自動比對和遷移資料庫 Schema
@@ -75,7 +75,8 @@ pip install duckdb pandas
 ### 可選依賴
 
 ```bash
-pip install tomli  # Python 3.10 以下需要，用於 TOML 配置
+pip install tomli   # Python 3.10 以下需要，用於 TOML 配置
+pip install pyyaml  # 用於 YAML 配置
 ```
 
 ### 作為獨立模組使用
@@ -134,7 +135,7 @@ with DuckDBManager('./data/my_database.duckdb') as db:
 
 ## 配置方式
 
-DuckDBManager 支援 4 種配置方式：
+DuckDBManager 支援 5 種配置方式：
 
 ### 方式 1: 字串路徑 (最簡單)
 
@@ -186,6 +187,26 @@ read_only = false
 config = DuckDBConfig.from_toml('config.toml', section='database')
 db = DuckDBManager(config)
 ```
+
+### 方式 5: 從 YAML 檔案載入
+
+```yaml
+# config.yaml
+database:
+  db_path: "./data.duckdb"
+  timezone: "Asia/Taipei"
+  log_level: "INFO"
+  read_only: false
+  connection_timeout: 30
+  enable_query_logging: true
+```
+
+```python
+config = DuckDBConfig.from_yaml('config.yaml', section='database')
+db = DuckDBManager(config)
+```
+
+> **注意**: 需要安裝 PyYAML 套件: `pip install pyyaml`
 
 ### 配置參數說明
 
@@ -880,6 +901,12 @@ with DuckDBManager('./data.duckdb') as db:
 ---
 
 ## 變更日誌
+
+### v2.1.0 (2026-02)
+
+**新功能**:
+- 新增 YAML 配置支援: `DuckDBConfig.from_yaml(path, section)`
+- 需要安裝 `pyyaml` 套件
 
 ### v2.0.0 (2026-02)
 

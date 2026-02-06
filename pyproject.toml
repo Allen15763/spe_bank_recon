@@ -49,6 +49,7 @@ dependencies = [
     "requests-oauthlib<=2.0.0",  # OAuth for requests
     "win32_setctime<=1.2.0",     # Windows 檔案時間設定
     "xlrd>=2.0.1",               # 讀取xls需要
+    "pyyaml>=6.0.0",             # YAML配置使用
 ]
 
 [project.optional-dependencies]

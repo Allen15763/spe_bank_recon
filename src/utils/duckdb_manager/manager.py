@@ -2,7 +2,7 @@
 DuckDB Manager 核心模組
 
 高可用、可移植的 DuckDB 管理器，支援:
-- 多種配置方式 (DuckDBConfig, dict, str 路徑, TOML)
+- 多種配置方式 (DuckDBConfig, dict, str 路徑, TOML, YAML)
 - 可插拔日誌系統
 - 完整的 CRUD 操作
 - 資料清理與轉換
@@ -26,6 +26,16 @@ Example:
     # 方式 3: 使用字典配置
     with DuckDBManager({"db_path": "./data.duckdb"}) as db:
         db.insert_df_into_table("users", new_users)
+
+    # 方式 4: 從 TOML 配置檔案
+    config = DuckDBConfig.from_toml("config.toml", section="database")
+    with DuckDBManager(config) as db:
+        ...
+
+    # 方式 5: 從 YAML 配置檔案
+    config = DuckDBConfig.from_yaml("config.yaml", section="database")
+    with DuckDBManager(config) as db:
+        ...
 """
 
 import duckdb

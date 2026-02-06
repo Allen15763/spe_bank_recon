@@ -6,6 +6,7 @@ DuckDB 管理器配置模組
 - dict 字典
 - str 資料庫路徑
 - TOML 檔案
+- YAML 檔案
 """
 
 from dataclasses import dataclass, field
@@ -121,6 +122,56 @@ class DuckDBConfig:
             raise KeyError(f"配置檔案中找不到 [{section}] 區段")
 
         return cls.from_dict(toml_data[section])
+
+    @classmethod
+    def from_yaml(
+        cls,
+        path: str | Path,
+        section: str = "database"
+    ) -> "DuckDBConfig":
+        """
+        從 YAML 檔案建立配置
+
+        Args:
+            path: YAML 檔案路徑 (.yaml 或 .yml)
+            section: 配置區段名稱，預設為 "database"
+
+        Returns:
+            DuckDBConfig: 配置實例
+
+        Raises:
+            FileNotFoundError: 檔案不存在
+            KeyError: 指定的 section 不存在
+            ImportError: 未安裝 PyYAML 套件
+
+        Example:
+            >>> config = DuckDBConfig.from_yaml("config.yaml", section="database")
+
+        Note:
+            需要安裝 PyYAML: pip install pyyaml
+        """
+        try:
+            import yaml
+        except ImportError:
+            raise ImportError(
+                "需要安裝 PyYAML 套件才能讀取 YAML 配置檔案。"
+                "請執行: pip install pyyaml"
+            )
+
+        path = Path(path)
+        if not path.exists():
+            raise FileNotFoundError(f"配置檔案不存在: {path}")
+
+        with open(path, "r", encoding="utf-8") as f:
+            yaml_data = yaml.safe_load(f)
+
+        if yaml_data is None:
+            raise ValueError(f"YAML 檔案為空或格式錯誤: {path}")
+
+        if section not in yaml_data:
+            raise KeyError(f"配置檔案中找不到 '{section}' 區段")
+
+        return cls.from_dict(yaml_data[section])
 
     @classmethod
     def from_path(cls, db_path: str | Path) -> "DuckDBConfig":

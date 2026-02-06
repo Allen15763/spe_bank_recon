@@ -29,6 +29,10 @@ DuckDB Manager - 高可用、可移植的 DuckDB 管理模組
     config = DuckDBConfig.from_toml("config.toml", section="database")
     db = DuckDBManager(config)
 
+    # 方式 5: 從 YAML 檔案載入配置
+    config = DuckDBConfig.from_yaml("config.yaml", section="database")
+    db = DuckDBManager(config)
+
 整合專案日誌:
     from duckdb_manager import DuckDBManager, DuckDBConfig
     from my_project.logging import get_logger
@@ -86,7 +90,7 @@ from .exceptions import (
     ConfigurationError,
 )
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 __author__ = "SPE Bank Recon Team"
 
 __all__ = [
