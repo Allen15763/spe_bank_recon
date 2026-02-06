@@ -7,6 +7,10 @@ SPE Bank Recon 主程式 - 重構版本
 編程調用示例:
     from spe_bank_recon.tasks.bank_recon import run_bank_recon
     result = run_bank_recon()
+
+Round 1: 更新完duckdb後放到./db，在src\config\bank_recon_config.toml中搜尋manual更新dates
+Round 2: 東西放到./input，在src\config\bank_recon_config.toml中搜尋manual更新business_rules
+         - .\src\config\bank_recon_entry_monthly.toml中搜尋manual更新期初數
 """
 
 import sys

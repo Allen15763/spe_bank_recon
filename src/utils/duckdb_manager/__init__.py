@@ -45,12 +45,37 @@ DuckDB Manager - 高可用、可移植的 DuckDB 管理模組
 
     config = DuckDBConfig(logger=NullLogger())
     db = DuckDBManager(config)
+
+Schema 遷移:
+    from duckdb_manager import DuckDBManager
+    from duckdb_manager.migration import SchemaMigrator
+
+    with DuckDBManager("./data.duckdb") as db:
+        migrator = SchemaMigrator(db)
+
+        # 比對 schema
+        diff = migrator.compare_schema("users", new_df)
+        print(diff.report())
+
+        # 執行遷移
+        result = migrator.migrate("users", new_df, strategy="safe")
 """
 
 from .config import DuckDBConfig
 from .manager import DuckDBManager
 from .exceptions import (
+    # 新版異常類 (推薦使用)
     DuckDBManagerError,
+    DuckDBConnectionError,
+    DuckDBTableError,
+    DuckDBTableExistsError,
+    DuckDBTableNotFoundError,
+    DuckDBQueryError,
+    DuckDBDataValidationError,
+    DuckDBTransactionError,
+    DuckDBConfigurationError,
+    DuckDBMigrationError,
+    # 舊版異常類別名 (向後相容，已棄用)
     ConnectionError,
     TableError,
     TableExistsError,
@@ -61,15 +86,27 @@ from .exceptions import (
     ConfigurationError,
 )
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 __author__ = "SPE Bank Recon Team"
 
 __all__ = [
     # 核心類
     "DuckDBManager",
     "DuckDBConfig",
-    # 異常類
+
+    # 新版異常類 (推薦使用)
     "DuckDBManagerError",
+    "DuckDBConnectionError",
+    "DuckDBTableError",
+    "DuckDBTableExistsError",
+    "DuckDBTableNotFoundError",
+    "DuckDBQueryError",
+    "DuckDBDataValidationError",
+    "DuckDBTransactionError",
+    "DuckDBConfigurationError",
+    "DuckDBMigrationError",
+
+    # 舊版異常類別名 (向後相容，已棄用)
     "ConnectionError",
     "TableError",
     "TableExistsError",

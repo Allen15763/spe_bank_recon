@@ -18,7 +18,18 @@ import pandas as pd
 from src.utils.duckdb_manager import (
     DuckDBManager as _BaseDuckDBManager,
     DuckDBConfig,
+    # 新版異常類
     DuckDBManagerError,
+    DuckDBConnectionError,
+    DuckDBTableError,
+    DuckDBTableExistsError,
+    DuckDBTableNotFoundError,
+    DuckDBQueryError,
+    DuckDBDataValidationError,
+    DuckDBTransactionError,
+    DuckDBConfigurationError,
+    DuckDBMigrationError,
+    # 舊版別名 (向後相容)
     ConnectionError,
     TableError,
     TableExistsError,
@@ -247,12 +258,24 @@ def backup_table(
 # ========== 導出列表 ==========
 
 __all__ = [
-    # 新模組類
+    # 核心類
     "DuckDBManager",
     "DuckDBConfig",
     "ProjectDuckDBManager",
-    # 異常類
+
+    # 新版異常類 (推薦使用)
     "DuckDBManagerError",
+    "DuckDBConnectionError",
+    "DuckDBTableError",
+    "DuckDBTableExistsError",
+    "DuckDBTableNotFoundError",
+    "DuckDBQueryError",
+    "DuckDBDataValidationError",
+    "DuckDBTransactionError",
+    "DuckDBConfigurationError",
+    "DuckDBMigrationError",
+
+    # 舊版異常類別名 (向後相容，已棄用)
     "ConnectionError",
     "TableError",
     "TableExistsError",
@@ -261,6 +284,7 @@ __all__ = [
     "DataValidationError",
     "TransactionError",
     "ConfigurationError",
+
     # 棄用函數 (向後相容)
     "create_table",
     "insert_table",
