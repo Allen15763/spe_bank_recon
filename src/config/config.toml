@@ -4,98 +4,98 @@
 # ============================================================
 
 [general]
-# 專案基本設定
-project_name = "spe_bank_recon"
-version = "1.0.0"
-description = "SPE資料處理任務框架"
-author = "SEA Team"
+    # 專案基本設定
+    project_name = "spe_bank_recon"
+    version = "1.0.0"
+    description = "SPE資料處理任務框架"
+    author = "SEA Team"
 
 
-DB_PATH = "./db/bank_statements.duckdb"
-LOG_FILE = "./logs/duckdb_operations.log"
-cred_path = "./src/secret/credentials.json"
+    DB_PATH = "./db/bank_statements.duckdb"
+    LOG_FILE = "./logs/duckdb_operations.log"
+    cred_path = "./src/secret/credentials.json"
 
 [logging]
-# 日誌設定
-level = "INFO"                  # DEBUG, INFO, WARNING, ERROR, CRITICAL
-detailed = true                 # 是否使用詳細格式
-color = true                    # 是否啟用彩色輸出
-max_file_size_mb = 10           # 單個日誌檔案最大大小（MB）
-backup_count = 5                # 保留的日誌備份數量
-log_to_file = true              # 是否輸出到檔案
-log_to_console = true           # 是否輸出到控制台
+    # 日誌設定
+    level = "INFO"                  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+    detailed = true                 # 是否使用詳細格式
+    color = true                    # 是否啟用彩色輸出
+    max_file_size_mb = 10           # 單個日誌檔案最大大小（MB）
+    backup_count = 5                # 保留的日誌備份數量
+    log_to_file = true              # 是否輸出到檔案
+    log_to_console = true           # 是否輸出到控制台
 
 [paths]
-# 路徑設定（相對於專案根目錄）
-log_path = "./logs"
-output_path = "./output"
-input_path = "./input"
-temp_path = "./temp"
-config_path = "./src/config"
+    # 路徑設定（相對於專案根目錄）
+    log_path = "./logs"
+    output_path = "./output"
+    input_path = "./input"
+    temp_path = "./temp"
+    config_path = "./src/config"
 
 [datasource]
-# 數據源預設設定
-default_encoding = "utf-8"
-excel_engine = "openpyxl"
-csv_separator = ","
-cache_enabled = true
-chunk_size = 10000              # 大檔案分塊讀取大小
+    # 數據源預設設定
+    default_encoding = "utf-8"
+    excel_engine = "openpyxl"
+    csv_separator = ","
+    cache_enabled = true
+    chunk_size = 10000              # 大檔案分塊讀取大小
 
 [datasource.excel]
-# Excel 專屬設定
-default_sheet = 0
-header_row = 0
-engine = "openpyxl"
+    # Excel 專屬設定
+    default_sheet = 0
+    header_row = 0
+    engine = "openpyxl"
 
 [datasource.csv]
-# CSV 專屬設定
-encoding = "utf-8"
-separator = ","
-quotechar = '"'
+    # CSV 專屬設定
+    encoding = "utf-8"
+    separator = ","
+    quotechar = '"'
 
 [datasource.parquet]
-# Parquet 專屬設定
-compression = "snappy"
-row_group_size = 50000
+    # Parquet 專屬設定
+    compression = "snappy"
+    row_group_size = 50000
 
 [pipeline]
-# Pipeline 預設設定
-stop_on_error = true
-log_level = "INFO"
-max_retries = 3
-retry_delay = 2                 # 重試延遲（秒）
+    # Pipeline 預設設定
+    stop_on_error = true
+    log_level = "INFO"
+    max_retries = 3
+    retry_delay = 2                 # 重試延遲（秒）
 
 [task]
-# 任務預設設定
-default_type = "transform"      # transform, compare, report
-timeout = 300                   # 任務超時時間（秒）
-save_intermediate = false       # 是否保存中間結果
+    # 任務預設設定
+    default_type = "transform"      # transform, compare, report
+    timeout = 300                   # 任務超時時間（秒）
+    save_intermediate = false       # 是否保存中間結果
 
 [task.transform]
-# 資料轉換任務設定
-validate_output = true
-backup_original = false
+    # 資料轉換任務設定
+    validate_output = true
+    backup_original = false
 
 [task.compare]
-# 資料比對任務設定
-tolerance = 0.0001              # 數值比對容差
-case_sensitive = false          # 字串比對是否區分大小寫
-ignore_whitespace = true        # 是否忽略空白字元
+    # 資料比對任務設定
+    tolerance = 0.0001              # 數值比對容差
+    case_sensitive = false          # 字串比對是否區分大小寫
+    ignore_whitespace = true        # 是否忽略空白字元
 
 [task.report]
-# 報表生成任務設定
-default_format = "excel"        # excel, csv, html
-include_summary = true
-include_charts = false
+    # 報表生成任務設定
+    default_format = "excel"        # excel, csv, html
+    include_summary = true
+    include_charts = false
 
 [output]
-# 輸出設定
-timestamp_format = "%Y%m%d_%H%M%S"
-filename_template = "{task_name}_{timestamp}"
-create_subfolders = true
+    # 輸出設定
+    timestamp_format = "%Y%m%d_%H%M%S"
+    filename_template = "{task_name}_{timestamp}"
+    create_subfolders = true
 
 [performance]
-# 效能設定
-parallel_processing = false     # 是否啟用並行處理
-max_workers = 4                 # 最大工作執行緒數
-memory_limit_mb = 2048          # 記憶體限制（MB）
+    # 效能設定
+    parallel_processing = false     # 是否啟用並行處理
+    max_workers = 4                 # 最大工作執行緒數
+    memory_limit_mb = 2048          # 記憶體限制（MB）
