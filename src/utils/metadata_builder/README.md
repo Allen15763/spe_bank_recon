@@ -4,7 +4,7 @@
 
 ## 特性
 
-- **Bronze Layer**: 原樣落地，`dtype=str` 讀取，自動添加 metadata
+- **Bronze Layer**: 原樣落地，`dtype='string'` 讀取，自動添加 metadata
 - **Silver Layer**: 欄位映射（支援 regex）、安全類型轉換、Circuit Breaker
 - **配置驅動**: SchemaConfig 定義欄位映射和驗證規則
 - **Pipeline 友好**: 作為工具類被 Step 呼叫，不綁定執行流程
@@ -15,6 +15,7 @@
 此插件為獨立模組，無需額外安裝。確保專案已安裝:
 - pandas
 - (可選) pyyaml - 用於 YAML 配置
+  - `pip install -e ".[dev]"`
 
 ## 快速開始
 
@@ -90,6 +91,93 @@ class ProcessBankStep(PipelineStep):
             db.create_table_from_df('bank_data', df_clean, if_exists='replace')
 
         return StepResult(status='SUCCESS', data=df_clean)
+```
+
+### 完整釋例
+```python
+from src.utils.metadata_builder import MetadataBuilder, SchemaConfig
+import logging
+logging.basicConfig(level=logging.INFO)
+loo = logging.getLogger(__name__)
+
+builder = MetadataBuilder(logger=loo)
+df_raw = builder.extract(
+    r'C:\SEA\Month_Closing_Automation_2025Q4\SPE_Bank_recon\filing data for Trust Account Fee Accrual-SPETW_202512 - 複製.xlsx', 
+    sheet_name=1, 
+    # dtype={'bank':str},  # 要放原始資料源不設定，會被覆蓋
+    add_metadata=True)
+
+schema = SchemaConfig.from_yaml(r'C:\SEA\Month_Closing_Automation_2025Q4\SPE_Bank_recon\schema_config.yaml', 
+                                section='banks.cub')
+# 空值很多算正常時，可放寬
+schema.circuit_breaker_threshold = 0.5
+
+df_clean = builder.transform(df_raw, schema)
+
+from src.utils.duckdb_manager import DuckDBManager
+
+with DuckDBManager('./db/data_test.duckdb') as db:
+    db.create_table_from_df('bronze_bank', df_raw, if_exists='replace')
+    db.create_table_from_df('silver_bank', df_clean, if_exists='replace')
+
+with DuckDBManager('./db/data_test.duckdb') as db:
+    print(db.show_tables())
+    # dict_keys(['table_name', 'row_count', 'columns', 'schema'])
+    info = db.get_table_info('bronze_bank')
+    
+    # 一般插入，非upsert
+    db.insert_df_into_table('bronze_bank', df_raw)
+
+    # upsert，檢查特定欄位有無重複後，移除重複插入
+    df_clean.iloc[0, df_clean.columns.get_loc('banks')] = 'test_upsert'
+    db.upsert_df_into_table('silver_bank', df_clean, ['banks'])
+    
+    # 查詢表並轉回DataFrame
+    data_x2 = db.query_to_df('SELECT * FROM bronze_bank')
+    data_ups = db.query_to_df('SELECT * FROM silver_bank')
+
+```
+
+#### Schema YAML範例
+```yaml
+# schema_config.yaml
+
+banks:
+  cub:
+    columns:
+      - source: "交易日期"
+        target: "date"
+        dtype: "DATE"
+        required: true
+        # date_format: '%Y-%m-%d'  # 建議預設就好 不放
+
+      - source: "銀行"
+        target: "banks"
+        dtype: "VARCHAR"
+        required: true
+
+      - source: "對帳_請款金額_前期發票當期撥款"
+        target: "對帳_請款金額_前期發票當期撥款"
+        dtype: "BIGINT"
+        required: false  # 預設通常為 false，明確寫出可增加可讀性
+
+
+      - source: "可能沒有的欄位"
+        target: "xdd"
+        dtype: "BIGINT"
+        required: false
+
+      - source: ".*total_tax.*"
+        target: "total_tax"
+        dtype: "DOUBLE"
+        required: false
+
+      - source: "預設欄位"  # 不在df會被塞進去
+        target: "預設欄位"
+        dtype: "DOUBLE"
+        required: false
+        default: 123
+
 ```
 
 ## API 參考

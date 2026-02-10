@@ -116,7 +116,7 @@ class SafeTypeCaster:
         - 處理空字串
         """
         # 清理字串
-        cleaned = series.astype(str).str.strip()
+        cleaned = series.astype('string').str.strip()
         cleaned = cleaned.str.replace(",", "", regex=False)
         cleaned = cleaned.str.replace("$", "", regex=False)
         cleaned = cleaned.str.replace("NT$", "", regex=False)
@@ -137,7 +137,7 @@ class SafeTypeCaster:
         - 移除貨幣符號
         - 處理百分比
         """
-        cleaned = series.astype(str).str.strip()
+        cleaned = series.astype('string').str.strip()
         cleaned = cleaned.str.replace(",", "", regex=False)
         cleaned = cleaned.str.replace("$", "", regex=False)
         cleaned = cleaned.str.replace("NT$", "", regex=False)
@@ -171,7 +171,7 @@ class SafeTypeCaster:
         Returns:
             pd.Series: 日期序列 (datetime64[ns])
         """
-        cleaned = series.astype(str).str.strip()
+        cleaned = series.astype('string').str.strip()
         cleaned = cleaned.replace(["", "nan", "None", "N/A", "-"], np.nan)
 
         if date_format:
@@ -197,7 +197,7 @@ class SafeTypeCaster:
         Returns:
             pd.Series: datetime 序列
         """
-        cleaned = series.astype(str).str.strip()
+        cleaned = series.astype('string').str.strip()
         cleaned = cleaned.replace(["", "nan", "None", "N/A", "-"], np.nan)
 
         if date_format:
@@ -215,7 +215,7 @@ class SafeTypeCaster:
         true_values = {"true", "yes", "1", "y", "t", "是", "有"}
         false_values = {"false", "no", "0", "n", "f", "否", "無"}
 
-        cleaned = series.astype(str).str.strip().str.lower()
+        cleaned = series.astype('string').str.strip().str.lower()
 
         def convert(val: str) -> bool | None:
             if val in true_values:

@@ -85,7 +85,7 @@ class MetadataBuilder:
         """
         Bronze: 強健地讀取源檔案
 
-        - 全部讀為 string (dtype=str)
+        - 全部讀為 string (dtype='string')
         - 標準化欄位名稱
         - 可選添加 metadata 欄位
 

@@ -25,7 +25,7 @@ class SourceReader:
 
     設計原則:
     - 容錯優先: 盡可能讀取資料，而非報錯
-    - 全字串讀取: dtype=str 避免類型推斷失敗
+    - 全字串讀取: dtype='string' 避免類型推斷失敗
     - 自動識別格式: 根據副檔名自動選擇讀取方法
 
     Attributes:
@@ -141,7 +141,7 @@ class SourceReader:
 
         # 全字串讀取
         if spec.read_as_string:
-            read_kwargs["dtype"] = str
+            read_kwargs["dtype"] = 'string'
 
         # 合併額外參數
         read_kwargs.update(kwargs)
@@ -191,7 +191,7 @@ class SourceReader:
         }
 
         if spec.read_as_string:
-            read_kwargs["dtype"] = str
+            read_kwargs["dtype"] = 'string'
 
         read_kwargs.update(kwargs)
 
@@ -238,7 +238,7 @@ class SourceReader:
 
             # Parquet 檔案通常已有正確類型，如需全字串則轉換
             if spec.read_as_string:
-                df = df.astype(str)
+                df = df.astype('string')
 
             self.logger.info(
                 f"成功讀取 Parquet: {file_path.name} ({len(df)} 行, {len(df.columns)} 欄)"
@@ -272,7 +272,7 @@ class SourceReader:
         }
 
         if spec.read_as_string:
-            read_kwargs["dtype"] = str
+            read_kwargs["dtype"] = 'string'
 
         read_kwargs.update(kwargs)
 
