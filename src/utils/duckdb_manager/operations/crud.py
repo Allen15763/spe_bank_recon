@@ -57,12 +57,38 @@ class CRUDMixin(OperationMixin):
                     raise DuckDBTableExistsError(table_name)
                 elif if_exists == 'replace':
                     self.logger.warning(f"替換現有表格 '{table_name}'")
-                    self.conn.sql(f'DROP TABLE IF EXISTS "{table_name}"')
+                    # 原子操作: DROP + CREATE + INSERT
+                    columns_with_types = []
+                    for col in df.columns:
+                        dtype_str = str(df[col].dtype)
+                        duckdb_dtype = get_duckdb_dtype(dtype_str)
+                        columns_with_types.append(f'"{col}" {duckdb_dtype}')
+                        self.logger.debug(
+                            f"欄位 '{col}': {dtype_str} -> {duckdb_dtype}"
+                        )
+                    columns_sql = ", ".join(columns_with_types)
+
+                    with self._atomic():
+                        self.conn.sql(
+                            f'DROP TABLE IF EXISTS "{table_name}"'
+                        )
+                        self.conn.sql(
+                            f'CREATE TABLE "{table_name}" ({columns_sql})'
+                        )
+                        self.conn.sql(
+                            f'INSERT INTO "{table_name}" SELECT * FROM df'
+                        )
+
+                    self.logger.info(
+                        f"成功替換表格 '{table_name}'，"
+                        f"插入 {len(df):,} 筆資料"
+                    )
+                    return True
                 elif if_exists == 'append':
                     self.logger.info(f"將資料附加到現有表格 '{table_name}'")
                     return self.insert_df_into_table(table_name, df)
 
-            # 建立欄位定義
+            # 建立欄位定義 (表格不存在時)
             columns_with_types = []
             for col in df.columns:
                 dtype_str = str(df[col].dtype)
@@ -137,7 +163,10 @@ class CRUDMixin(OperationMixin):
                 f"開始 upsert 操作到 '{table_name}'，使用鍵: {key_columns}"
             )
 
-            # 先刪除重複的記錄
+            if not self._table_exists(table_name):
+                raise DuckDBTableNotFoundError(table_name)
+
+            # 建構 WHERE 條件
             key_conditions = []
             for key_col in key_columns:
                 unique_values = df[key_col].unique()
@@ -149,26 +178,36 @@ class CRUDMixin(OperationMixin):
                     values_str = "', '".join(escaped_values)
                     key_conditions.append(f'"{key_col}" IN (\'{values_str}\')')
 
-            if key_conditions:
-                where_clause = " AND ".join(key_conditions)
-                deleted_result = self.conn.sql(
-                    f'SELECT COUNT(*) as count FROM "{table_name}" '
-                    f'WHERE {where_clause}'
-                ).df()
-                deleted_count = (
-                    deleted_result.iloc[0]['count']
-                    if not deleted_result.empty else 0
+            # 原子操作: DELETE + INSERT
+            with self._atomic():
+                if key_conditions:
+                    where_clause = " AND ".join(key_conditions)
+                    deleted_result = self.conn.sql(
+                        f'SELECT COUNT(*) as count FROM "{table_name}" '
+                        f'WHERE {where_clause}'
+                    ).df()
+                    deleted_count = (
+                        deleted_result.iloc[0]['count']
+                        if not deleted_result.empty else 0
+                    )
+
+                    self.conn.sql(
+                        f'DELETE FROM "{table_name}" WHERE {where_clause}'
+                    )
+                    self.logger.info(f"刪除了 {deleted_count} 筆重複記錄")
+
+                # 直接 INSERT (不透過 insert_df_into_table 以保持事務一致性)
+                self.conn.sql(
+                    f'INSERT INTO "{table_name}" SELECT * FROM df'
                 )
 
-                self.conn.sql(f'DELETE FROM "{table_name}" WHERE {where_clause}')
-                self.logger.info(f"刪除了 {deleted_count} 筆重複記錄")
+            self.logger.info(
+                f"Upsert 完成: 插入 {len(df):,} 筆資料到 '{table_name}'"
+            )
+            return True
 
-            # 插入新資料
-            result = self.insert_df_into_table(table_name, df)
-            if result:
-                self.logger.info("Upsert 操作完成")
-            return result
-
+        except DuckDBTableNotFoundError:
+            raise
         except Exception as e:
             self.logger.error(f"Upsert 操作失敗: {e}")
             return False
