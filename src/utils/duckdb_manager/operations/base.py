@@ -5,6 +5,7 @@ DuckDB Manager Mixin 基類
 """
 
 from typing import TYPE_CHECKING, Optional
+from contextlib import contextmanager
 import pandas as pd
 
 if TYPE_CHECKING:
@@ -73,3 +74,41 @@ class OperationMixin:
         if self.config.enable_query_logging and description:
             self.logger.debug(f"{description}: {sql[:100]}...")
         self.conn.sql(sql)
+
+    # ========== 事務 Helper ==========
+
+    def _begin(self) -> None:
+        """開始事務"""
+        self.conn.sql("BEGIN TRANSACTION")
+
+    def _commit(self) -> None:
+        """提交事務"""
+        self.conn.sql("COMMIT")
+
+    def _rollback(self) -> None:
+        """回滾事務 (靜默處理已無事務的情況)"""
+        try:
+            self.conn.sql("ROLLBACK")
+        except Exception:
+            pass
+
+    @contextmanager
+    def _atomic(self):
+        """
+        原子操作 context manager
+
+        將多步驟操作包裹在同一個 Transaction 中，
+        任何步驟失敗時自動 rollback。
+
+        Example:
+            >>> with self._atomic():
+            ...     self.conn.sql("DELETE FROM ...")
+            ...     self.conn.sql("INSERT INTO ...")
+        """
+        self._begin()
+        try:
+            yield
+            self._commit()
+        except Exception:
+            self._rollback()
+            raise

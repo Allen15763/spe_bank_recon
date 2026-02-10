@@ -12,116 +12,116 @@
 # ============================================================
 
 [metadata]
-# 配置檔元資料
-version = "1.0.0"
-last_updated = "2026-02-05"
-# Manual
-description = "2026年1月 Entry 月度調整配置"
+    # 配置檔元資料
+    version = "1.0.1"
+    last_updated = "2026-02-05"
+    # Manual
+    description = "2026年1月 Entry 月度調整配置"
 
 # ============================================================
 # 期初數配置
 # ============================================================
 
 [opening_balances]
-# 說明：每月結帳前需更新，通常等於上月期末數 - Manual
+    # 說明：每月結帳前需更新，通常等於上月期末數 - Manual
 
-# === 資產類科目 ===
-# 111301 - Tax Receivable - GST/VAT
-"111301" = -14441.0
-# -11536.0
+    # === 資產類科目 ===
+    # 111301 - Tax Receivable - GST/VAT
+    "111301" = -14441.0
+    # -11536.0
 
-# 111302 - Tax Receivable - WHT
-"111302" = 2776886.0
+    # 111302 - Tax Receivable - WHT
+    "111302" = 2776886.0
 
-# 112001 - Amount due from IC-APYTW
-"112001" = 0.0
+    # 112001 - Amount due from IC-APYTW
+    "112001" = 0.0
 
-# 112002 - Unbilled Receivables-RC-SPTTW
-"112002" = 196692124.0
-# 181118860.0
+    # 112002 - Unbilled Receivables-RC-SPTTW
+    "112002" = 196692124.0
+    # 181118860.0
 
-# 113101 - Receivables from payment gateway
-"113101" = 0.0
+    # 113101 - Receivables from payment gateway
+    "113101" = 0.0
 
-# 101150 - Cash in Bank - Fubon TWD 2087
-"101150" = 0.0
+    # 101150 - Cash in Bank - Fubon TWD 2087
+    "101150" = 0.0
 
-# 104171 - Escrow Bank - CTBC TWD 4935
-"104171" = 1510107855
-# 1394478080.0
+    # 104171 - Escrow Bank - CTBC TWD 4935
+    "104171" = 1510107855
+    # 1394478080.0
 
-# === 負債類科目 ===
-# 200208其實不放期初期末數也沒差，入帳入200701的數字就好->分錄有平的情況下
-# 200208 - Receive on behalf of Shopee (借方)
-"200208_debit" = 1063404864993
-#  990741706660.0
+    # === 負債類科目 ===
+    # 200208其實不放期初期末數也沒差，入帳入200701的數字就好->分錄有平的情況下
+    # 應填數字 = 前期數 + 上期底稿entry_long_temp的200208加總
+    # 200208 - Receive on behalf of Shopee (借方)
+    "200208_debit" = 1063404864993
+    #  990741706660.0
 
-# 200208 - Receive on behalf of Shopee (貸方)
-"200208_credit" = -1063404864993
-# -990741706660.0
+    # 200208 - Receive on behalf of Shopee (貸方)
+    "200208_credit" = -1063404864993
+    # -990741706660.0
 
-# 200601 - Tax Payables - GST/VAT/WHT
-"200601" = 0.0
+    # 200601 - Tax Payables - GST/VAT/WHT
+    "200601" = 0.0
 
-# 200701 - Amount due to SPTTW-Escrow
-"200701" = -1556182997
-# -1431762212.0
+    # 200701 - Amount due to SPTTW-Escrow
+    "200701" = -1556182997
+    # -1431762212.0
 
-# === 收入類科目 ===
-# 440001 - Interest Income
-"440001" = 0.0
+    # === 收入類科目 ===
+    # 440001 - Interest Income
+    "440001" = 0.0
 
 # ============================================================
 # 沖轉金額配置
 # ============================================================
 
 [reversal_amounts]
-# 說明：發票已開立沖轉金額，通常等於 112002 期初數的負值 - Manual
-# Search `112002 - Unbilled Receivables-RC-SPTTW`
-"112002_reversal" = -196692124
-# -181118860.0
+    # 說明：發票已開立沖轉金額，通常等於 112002 期初數的負值 - Manual
+    # Search `112002 - Unbilled Receivables-RC-SPTTW`
+    "112002_reversal" = -196692124
 
 # ============================================================
 # 特殊日期分錄配置
 # ============================================================
 
 [special_dates]
-# 說明：特殊日期的額外分錄，如利息收入、調整等
-# 格式：日期 = [ { account_no = "科目", transaction_type = "類型", amount = 金額 }, ... ]
+    # 說明：特殊日期的額外分錄，如利息收入、調整等
+    # 格式：日期 = [ { account_no = "科目", transaction_type = "類型", amount = 金額 }, ... ]
 
-# 範例：利息收入 (取消註解並填入實際數值)
-# "2025-10-21" = [
-#     { account_no = "104171", transaction_type = "other_利息", amount = 900.0 },
-#     { account_no = "111302", transaction_type = "other_利息", amount = 100.0 },
-#     { account_no = "440001", transaction_type = "other_利息", amount = -1000.0 },
-# ]
+    # 範例：利息收入 (取消註解並填入實際數值)
+    # "2025-10-21" = [
+    #     { account_no = "104171", transaction_type = "other_利息", amount = 900.0 },
+    #     { account_no = "111302", transaction_type = "other_利息", amount = 100.0 },
+    #     { account_no = "440001", transaction_type = "other_利息", amount = -1000.0 },
+    # ]
 
-# 範例：其他調整
-# "2025-10-25" = [
-#     { account_no = "104171", transaction_type = "other", amount = 13951257.0 },
-#     { account_no = "999995", transaction_type = "other", amount = -13951257.0 },
-# ]
+    # 範例：其他調整
+    # "2025-10-25" = [
+    #     { account_no = "104171", transaction_type = "other", amount = 13951257.0 },
+    #     { account_no = "999995", transaction_type = "other", amount = -13951257.0 },
+    # ]
 
 # ============================================================
 # 科目特殊處理配置
 # ============================================================
 
 [account_special_rules]
-# 說明：某些科目需要特殊處理的規則
+    # 說明：某些科目需要特殊處理的規則
 
-# 200208 科目需要借貸雙邊記錄
-"200208_dual_entry" = true
+    # 200208 科目需要借貸雙邊記錄
+    "200208_dual_entry" = true
 
-# 112002 科目需要沖轉處理
-"112002_reversal_enabled" = true
+    # 112002 科目需要沖轉處理
+    "112002_reversal_enabled" = true
 
 # ============================================================
 # 驗證閾值配置
 # ============================================================
 
 [validation_thresholds]
-# 餘額檢核容差
-balance_tolerance = 1.0
+    # 餘額檢核容差
+    balance_tolerance = 1.0
 
-# 百分比檢核容差
-percentage_tolerance = 0.01
+    # 百分比檢核容差
+    percentage_tolerance = 0.01

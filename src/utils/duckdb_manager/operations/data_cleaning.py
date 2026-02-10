@@ -119,7 +119,7 @@ class DataCleaningMixin(OperationMixin):
 
         Args:
             table_name: 表格名稱
-            column_name: 欄位名稱
+            column_name: 欄位名稱；for VARCHAR column
             remove_chars: 要移除的字符列表
             preview_only: 僅預覽清理結果，不實際執行更新
 
@@ -129,7 +129,7 @@ class DataCleaningMixin(OperationMixin):
         try:
             if remove_chars is None:
                 # 常見的千分位符號和貨幣符號
-                remove_chars = [',', '$', '€', '¥', ' ', '￥', '₩', '£']
+                remove_chars = [',', '$', '€', '¥', ' ', '￥', '₩', '£', '_', '-']
 
             self.logger.info(f"開始清理表格 '{table_name}' 的欄位 '{column_name}'")
             self.logger.debug(f"將移除字符: {remove_chars}")
@@ -238,6 +238,8 @@ class DataCleaningMixin(OperationMixin):
         """
         清理並轉換欄位型態的一站式方法
 
+        所有步驟在同一個 Transaction 中執行，任何步驟失敗自動回滾。
+
         Args:
             table_name: 表格名稱
             column_name: 欄位名稱
@@ -253,49 +255,80 @@ class DataCleaningMixin(OperationMixin):
                 f"開始清理並轉換欄位 '{column_name}' 為 {target_type}"
             )
 
-            # Step 1: 清理數據
-            clean_success = self.clean_numeric_column(
-                table_name=table_name,
-                column_name=column_name,
-                remove_chars=remove_chars,
-                preview_only=False
-            )
+            if remove_chars is None:
+                remove_chars = [',', '$', '€', '¥', ' ', '￥', '₩', '£', '_', '-']
 
-            if not clean_success:
-                return False
-
-            # Step 2: 處理空字串
-            if handle_empty_as_null:
-                empty_query = f"""
-                UPDATE "{table_name}"
-                SET "{column_name}" = NULL
-                WHERE "{column_name}" = '' OR "{column_name}" = ' '
-                """
-                self.conn.sql(empty_query)
-                self.logger.debug("已將空字串轉換為 NULL")
-
-            # Step 3: 最終驗證
+            # 先驗證 (在事務外，只讀操作)
             validation_success = self._validate_conversion(
                 table_name, column_name, target_type
             )
-            if not validation_success:
-                return False
 
-            # Step 4: 執行型態轉換
-            conversion_success = self.alter_column_type(
-                table_name=table_name,
-                column_name=column_name,
-                new_type=target_type,
-                validate_conversion=False  # 已經驗證過了
-            )
-
-            if conversion_success:
-                self.logger.info(
-                    f"成功完成清理和轉換！"
-                    f"欄位 '{column_name}' 現在是 {target_type} 型態"
+            # 建立清理 SQL
+            cleaned_expression = f'"{column_name}"'
+            for char in remove_chars:
+                cleaned_expression = (
+                    f"REPLACE({cleaned_expression}, '{char}', '')"
                 )
 
-            return conversion_success
+            check_conditions = [
+                f'"{column_name}" LIKE \'%{char}%\''
+                for char in remove_chars
+            ]
+
+            # 原子操作: UPDATE (清理) + UPDATE (空→NULL) + ALTER TYPE
+            with self._atomic():
+                # Step 1: 清理非數字字符
+                update_query = f"""
+                UPDATE "{table_name}"
+                SET "{column_name}" = {cleaned_expression}
+                WHERE "{column_name}" IS NOT NULL
+                AND ({' OR '.join(check_conditions)})
+                """
+                self.conn.sql(update_query)
+                self.logger.debug("Step 1: 清理非數字字符完成")
+
+                # Step 2: 處理空字串
+                if handle_empty_as_null:
+                    empty_query = f"""
+                    UPDATE "{table_name}"
+                    SET "{column_name}" = NULL
+                    WHERE "{column_name}" = '' OR "{column_name}" = ' '
+                    """
+                    self.conn.sql(empty_query)
+                    self.logger.debug("Step 2: 空字串轉 NULL 完成")
+
+                # Step 3: 驗證轉換可行性 (在事務內再次驗證)
+                if target_type.upper() in [
+                    'BIGINT', 'INTEGER', 'DOUBLE', 'REAL'
+                ]:
+                    invalid_result = self.conn.sql(f"""
+                    SELECT COUNT(*) as invalid_count
+                    FROM "{table_name}"
+                    WHERE "{column_name}" IS NOT NULL
+                    AND TRY_CAST("{column_name}" AS {target_type}) IS NULL
+                    """).df()
+                    invalid_count = (
+                        invalid_result.iloc[0]['invalid_count']
+                        if not invalid_result.empty else 0
+                    )
+                    if invalid_count > 0:
+                        raise ValueError(
+                            f"清理後仍有 {invalid_count} 筆"
+                            f"無法轉換為 {target_type}"
+                        )
+
+                # Step 4: 執行型態轉換
+                self.conn.sql(
+                    f'ALTER TABLE "{table_name}" '
+                    f'ALTER COLUMN "{column_name}" TYPE {target_type}'
+                )
+                self.logger.debug("Step 4: 型態轉換完成")
+
+            self.logger.info(
+                f"成功完成清理和轉換！"
+                f"欄位 '{column_name}' 現在是 {target_type} 型態"
+            )
+            return True
 
         except Exception as e:
             self.logger.error(f"清理和轉換過程失敗: {e}")
