@@ -38,12 +38,25 @@ def validate_dfr_columns(df: pd.DataFrame,
         if col not in df.columns:
             result['inbound_valid'] = False
             result['inbound_missing'].append(col)
+    st_idx = df.columns.get_loc(inbound_validation_cols[0])
+    ed_idx = df.columns.get_loc(inbound_validation_cols[-2])
+    if all(df.iloc[:, st_idx:ed_idx + 1].columns == inbound_validation_cols[:-1]):
+        logger.info("DFR Inbound 欄位前段順序未改變")
+    else:
+        result['inbound_valid'] = False
     
     # 檢查 Outbound 欄位
     for col in outbound_validation_cols:
         if col not in df.columns:
             result['outbound_valid'] = False
             result['outbound_missing'].append(col)
+    
+    st_idx = df.columns.get_loc(outbound_validation_cols[0])
+    ed_idx = df.columns.get_loc(outbound_validation_cols[-1])
+    if all(df.iloc[:, st_idx:ed_idx + 1].columns == outbound_validation_cols):
+        logger.info("DFR Outbound 欄位整段順序未改變")
+    else:
+        result['outbound_valid'] = False
     
     if result['inbound_valid']:
         logger.info("DFR Inbound 欄位驗證通過")
