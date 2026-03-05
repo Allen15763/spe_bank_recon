@@ -31,10 +31,10 @@
 
 [dates]
     # 預設日期範圍 (可從命令列覆寫) - Manual
-    current_period_start = "2026-01-01"
-    current_period_end = "2026-01-31"
-    last_period_start = "2025-12-01"
-    last_period_end = "2025-12-31"
+    current_period_start = "2026-02-01"
+    current_period_end = "2026-02-28"
+    last_period_start = "2026-01-01"
+    last_period_end = "2026-01-31"
 
     # 日期格式
     date_format = "%Y-%m-%d"
@@ -59,18 +59,18 @@
     # 每月需要調整的參數
     # FRR 調扣，用於加回核算手續費發票數字，FRR上是負數要加負號
     # 讓sheet: apcc_validate_frr的差異數跟FRR調扣相同
-    ops_taishi_adj_amt = 6252
-    ops_cub_adj_amt =  -2083
+    ops_taishi_adj_amt = 0
+    ops_cub_adj_amt =  -611
     ops_ctbc_adj_amt = 0
     ops_nccc_adj_amt = 0
 
     # COD 匯費
-    cod_remittance_fee = 8050  # 9740  
-    ach_exps = 10194451  # 9163359  # 中信 ACH eACH EDI
+    cod_remittance_fee = 6430  # 9740  
+    ach_exps = 6815039  # 9163359  # 中信 ACH eACH EDI
 
-    # 手續費尾差調整 (調成跟發票一致)
-    taishi_service_fee_rounding = 0
-    ctbc_service_fee_rounding = 2
+    # 手續費尾差調整 (Trust account fee回補手續費的手續費調成跟發票一致)
+    taishi_service_fee_rounding = 5
+    ctbc_service_fee_rounding = 0
 
     # 中信回饋金（若當月無則設為 0）
     ctbc_rebate_amt = 0  # 0
@@ -86,7 +86,8 @@
     "2025-11-27" =  175204850
     "2025-12-29" =  198032678
     "2026-01-28" =  195643924
-
+    "2026-02-28" =  189011823
+    
 # ============================================================
 # 銀行配置
 # ============================================================
@@ -349,7 +350,7 @@
 
 # FRR (財務部) 檔案配置
 [daily_check.frr]
-    path = "./input/財務部-{period}.xlsx"
+    path = "./input/財務部_{period}.xlsx"
     sheet_name = "匯入款組成-樂購"
     header_row = 0
 
@@ -418,7 +419,8 @@
         "Digital Product Payment",
         "SVS",
         "715120012087 (OLD)\n715120019251 (NEW)",
-        "Shopping Plus"
+        "Shopping Plus",
+        "VIP"
     ]
     outbound_extra_cols = [
         "Others",
@@ -436,6 +438,7 @@
         "SVS",
         "715120012087 (OLD)\n715120019251 (NEW)",
         "Shopping Plus",
+        "VIP",
         "Others",
         "Others.1",
         "Shopee Wallet",
