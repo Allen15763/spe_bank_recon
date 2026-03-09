@@ -179,7 +179,7 @@ def process_dfr_data(df: pd.DataFrame,
     interbank = get_single_column_sum(columns_config.get('interbank_col', 'Interbank\ntransfer'))
     offline_transfer = get_single_column_sum(columns_config.get('offline_transfer', 'offline transfer'))
 
-    adj = get_single_column_sum(columns_config.get('adj_col', '調撥'))
+    # adj = get_single_column_sum(columns_config.get('adj_col', '調撥'))
     # 信託戶手續費提領
     withdraw_service_fee = get_single_column_sum(columns_config.get('withdraw_service_fee_col', '手續費'))
     balance = get_single_column_sum(columns_config.get('balance_col', 'Balance.1'))
@@ -194,7 +194,7 @@ def process_dfr_data(df: pd.DataFrame,
         'interest': interest.values,
         'interbank': interbank.values,
         'offline_transfer': offline_transfer.values,
-        'adj': adj.values,
+        # 'adj': adj.values,
         'withdraw_service_fee': withdraw_service_fee.values,
         'balance': balance.values,
     })

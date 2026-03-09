@@ -175,8 +175,11 @@ def validate_accounting_balance(df_entry_temp: pd.DataFrame) -> Dict[str, Any]:
 
 
 def get_easyfund_adj_service_fee_for_SPT(df, beg_date: str) -> tuple:
-    """從仲信手續費檔案取得折讓金額"""
-    idx_discount = df.loc[df.號碼.str.contains(f"/{beg_date[5:7]}.*折讓總計", na=False, regex=True)].index[-1]
+    """從仲信手續費檔案取得折讓金額
+    在"號碼"欄位搜尋yyyy/mm.*折讓總計，yyyymm為當期年月
+    e.g. 2026/01 折讓總計
+    """
+    idx_discount = df.loc[df.號碼.str.contains(f"{beg_date[:4]}/{beg_date[5:7]}.*折讓總計", na=False, regex=True)].index[-1]
 
     acc_111301 = df.iloc[idx_discount, df.columns.get_loc('VAT')]
     acc_200701 = df.iloc[idx_discount, df.columns.get_loc('含稅')] * -1
@@ -515,7 +518,8 @@ class ConfigurableEntryConfig:
                 adj_service_fee = get_easyfund_adj_service_fee_for_SPT(df_easyfund, beg_date)
                 service_fee_999995 = get_easyfund_service_fee_for_999995(df_easyfund, beg_date)
             except Exception as e:
-                self.logger.warning(f"計算仲信手續費金額失敗: {e}")
+                self.logger.error(f"計算仲信手續費金額失敗: {e}")
+                raise ValueError("找不到當期仲信手續費金額")
         
         summary_data = {
             # ===== 資產類科目 =====

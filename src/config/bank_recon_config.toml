@@ -389,7 +389,7 @@
     # Inbound 欄位範圍
     inbound_start_col = "BT"
     inbound_end_col = "Collection Shop"
-    inbound_extra_cols = ["offline transfer"]
+    inbound_extra_cols = ["offline transfer", "調撥"]
 
     # Inbound 驗證欄位清單
     inbound_validation_cols = [
@@ -410,7 +410,8 @@
         "新竹物流\n(ＨＣＴ新竹物流)",
         "蝦皮店到店(SPX)\n(新加坡商蝦皮娛)",
         "Collection Shop",
-        "offline transfer"
+        "offline transfer",
+        "調撥"
     ]
 
     # Outbound 欄位清單
@@ -439,7 +440,7 @@
         "715120012087 (OLD)\n715120019251 (NEW)",
         "Shopping Plus",
         "VIP",
-        "Others",
+        "Others",                                     # 可能會放調撥的匯回
         "Others.1",
         "Shopee Wallet",
         "COD RR",
@@ -453,7 +454,7 @@
     spl_col = "企網自行轉帳\n20680100228850"
     interest_col = "存款息"
     interbank_col = "Interbank\ntransfer"
-    adj_col = "調撥"
+    # adj_col = "調撥"
     withdraw_service_fee_col = "手續費"
     balance_col = "Balance.1"
 

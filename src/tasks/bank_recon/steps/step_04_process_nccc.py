@@ -47,7 +47,7 @@ class NCCCProcessor(BankProcessor):
         """
         計算 NCCC 對帳金額
         
-        NCCC 計算邏輯:
+        NCCC 計算邏輯: based on **nccc_recon_statement**
         1. 當期請款金額 = 撥款日期在期間內的 request_amount
         2. 前期發票當期撥款 = 撥款在當期 BUT 請款不在當期
         3. 當期手續費 = 撥款日期在期間內的 handling_fee
